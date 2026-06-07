@@ -1,0 +1,71 @@
+{
+  "name": "07-Follow-Up-Cron",
+  "active": true,
+  "nodes": [
+    {
+      "name": "Every Day 10am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {"interval": [{"field": "hours", "hoursInterval": 24}]}
+      }
+    },
+    {
+      "name": "Get Stale Leads",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, full_name, phone_number FROM customers WHERE lead_stage NOT IN ('won','lost') AND last_interaction < now() - interval '48 hours' LIMIT 50;"
+      }
+    },
+    {
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "name": "Send Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{$env.WHATSAPP_PHONE_NUMBER_ID}}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{$env.WHATSAPP_ACCESS_TOKEN}}"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"messaging_product\":\"whatsapp\",\"to\":\"{{$json.phone_number}}\",\"type\":\"text\",\"text\":{\"body\":\"مرحباً {{$json.full_name}}! 👋 لا تزال فرصة الحصول على سيرتك الذاتية الاحترافية متاحة. لدينا خصم 15% هذا الأسبوع فقط. تواصل معنا الآن!\"}}"
+      }
+    },
+    {
+      "name": "Log Follow-up",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET last_interaction = now() WHERE id = '{{$('Split In Batches').item.json.id}}';"
+      }
+    }
+  ],
+  "connections": {
+    "Every Day 10am": {"main": [[{"node": "Get Stale Leads", "type": "main", "index": 0}]]},
+    "Get Stale Leads": {"main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]},
+    "Split In Batches": {"main": [[{"node": "Send Follow-up", "type": "main", "index": 0}]]},
+    "Send Follow-up": {"main": [[{"node": "Log Follow-up", "type": "main", "index": 0}]]},
+    "Log Follow-up": {"main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]}
+  },
+  "settings": { "executionOrder": "v1" }
+}

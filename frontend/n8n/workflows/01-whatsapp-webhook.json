@@ -1,0 +1,125 @@
+{
+  "name": "01-WhatsApp-Webhook",
+  "active": true,
+  "nodes": [
+    {
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "whatsapp-main",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "name": "Verify Token Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 100],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "name": "Return Hub Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [500, 100],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.query['hub.challenge']}}"
+      }
+    },
+    {
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [500, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"name": "phone", "value": "={{$json.body.entry[0].changes[0].value.messages[0].from}}", "type": "string"},
+            {"name": "message", "value": "={{$json.body.entry[0].changes[0].value.messages[0].text.body}}", "type": "string"},
+            {"name": "name", "value": "={{$json.body.entry[0].changes[0].value.contacts[0].profile.name}}", "type": "string"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Upsert Customer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO customers (phone_number, full_name, language, lead_stage, last_interaction) VALUES ('{{$json.phone}}', '{{$json.name}}', 'ar', 'new', now()) ON CONFLICT (phone_number) DO UPDATE SET last_interaction = now(), full_name = '{{$json.name}}' RETURNING id, full_name, lead_stage, buying_intent_score;"
+      }
+    },
+    {
+      "name": "Save Inbound Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH conv AS (INSERT INTO conversations (customer_id, channel, status) VALUES ('{{$json.id}}', 'whatsapp', 'open') ON CONFLICT DO NOTHING RETURNING id) INSERT INTO messages (conversation_id, customer_id, direction, content, content_type, channel, is_ai_generated) SELECT COALESCE((SELECT id FROM conv), (SELECT id FROM conversations WHERE customer_id = '{{$json.id}}' AND channel = 'whatsapp' LIMIT 1)), '{{$json.id}}', 'inbound', '{{$('Extract Message').item.json.message}}', 'text', 'whatsapp', false RETURNING conversation_id;"
+      }
+    },
+    {
+      "name": "Call AI Sales Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "workflowId": "04-Sales-Agent",
+        "mode": "passThrough"
+      }
+    },
+    {
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{$env.WHATSAPP_PHONE_NUMBER_ID}}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{$env.WHATSAPP_ACCESS_TOKEN}}"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"messaging_product\":\"whatsapp\",\"to\":\"{{$('Extract Message').item.json.phone}}\",\"type\":\"text\",\"text\":{\"body\":\"{{$json.ai_reply}}\"}}"
+      }
+    },
+    {
+      "name": "Save Outbound Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1750, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, customer_id, direction, content, content_type, channel, is_ai_generated) VALUES ('{{$('Save Inbound Message').item.json.conversation_id}}', '{{$('Upsert Customer').item.json.id}}', 'outbound', '{{$json.ai_reply}}', 'text', 'whatsapp', true);"
+      }
+    }
+  ],
+  "connections": {
+    "Verify Token Check": {"main": [[{"node": "Return Hub Challenge", "type": "main", "index": 0}]]},
+    "WhatsApp Webhook": {"main": [[{"node": "Extract Message", "type": "main", "index": 0}]]},
+    "Extract Message": {"main": [[{"node": "Upsert Customer", "type": "main", "index": 0}]]},
+    "Upsert Customer": {"main": [[{"node": "Save Inbound Message", "type": "main", "index": 0}]]},
+    "Save Inbound Message": {"main": [[{"node": "Call AI Sales Agent", "type": "main", "index": 0}]]},
+    "Call AI Sales Agent": {"main": [[{"node": "Send WhatsApp Reply", "type": "main", "index": 0}]]},
+    "Send WhatsApp Reply": {"main": [[{"node": "Save Outbound Message", "type": "main", "index": 0}]]}
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,762 @@
+{
+  "name": "CVPro - WhatsApp AI (Fixed URL Builder)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d39c359e-6022-4520-9fc3-ff085067acb6",
+      "name": "WhatsApp Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "cvpro-wa-verify"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.query || {};\nconst expectedToken = \"cvpro_verify_2024_random\";\nconst receivedToken = query['hub.verify_token'] || query['hub_verify_token'];\nconst mode = query['hub.mode'] || query['hub_mode'];\nconst challenge = query['hub.challenge'] || query['hub_challenge'];\nif (mode === 'subscribe' && receivedToken === expectedToken) {\n  const challengeNum = parseInt(challenge, 10);\n  return [{ json: { verified: true, challenge: challengeNum } }];\n} else {\n  return [{ json: { verified: false, challenge: null } }];\n}"
+      },
+      "id": "aef8c162-f983-4485-aa50-1080bf55eb76",
+      "name": "Verify Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.verified ? $json.challenge : 'Forbidden' }}",
+        "options": {
+          "responseCode": "={{ $json.verified ? 200 : 403 }}"
+        }
+      },
+      "id": "34a9a768-6d3e-48d3-ab1f-fad603021924",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dce8bad8-fe15-4556-8f6c-8cc14f5026db",
+      "name": "WhatsApp Webhook (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        208
+      ],
+      "webhookId": "cvpro-wa-main"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "fb8201e0-e7bc-4a3a-80e7-4d60829ee2e6",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\nif (!message) return [];\nconst from = message.from;\nconst msgType = message.type;\nlet text = '';\nif (msgType === 'text') {\n  text = message.text?.body || '';\n} else if (msgType === 'document' || msgType === 'image') {\n  text = message[msgType]?.caption || '';\n} else {\n  text = '[non-text]';\n}\nreturn [{\n  json: {\n    from,\n    text,\n    msgType,\n    phoneNumberId: value?.metadata?.phone_number_id,\n    timestamp: message.timestamp,\n    profileName: value?.contacts?.[0]?.profile?.name || ''\n  }\n}];"
+      },
+      "id": "eed98182-98ca-421f-a3a5-e4066180359a",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fromNumber = $input.first().json.from;\nconst url = `https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/customers?phone_number=eq.${fromNumber}&select=*`;\nreturn [{ json: { url, from: fromNumber, phoneNumberId: $input.first().json.phoneNumberId, text: $input.first().json.text, profileName: $input.first().json.profileName } }];"
+      },
+      "id": "51b656e4-6e91-4c9c-b224-9fbbb2d3eaa8",
+      "name": "Build Customer URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a842735-4e4f-4b19-b82a-738838509d9b",
+      "name": "Find Customer (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1008,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const customers = $input.first().json;\nlet exists = false;\nlet customerId = null;\n\n// Check if customers is an array with at least one item\nif (Array.isArray(customers) && customers.length > 0) {\n  exists = true;\n  customerId = customers[0].id;\n}\n// Check if customers is a single object with an id\nelse if (customers && typeof customers === 'object' && customers.id) {\n  exists = true;\n  customerId = customers.id;\n}\n\nconst fromData = $('Build Customer URL').item.json;\nreturn [{\n  json: {\n    exists,\n    customerId,\n    from: fromData.from,\n    phoneNumberId: fromData.phoneNumberId,\n    text: fromData.text,\n    profileName: fromData.profileName\n  }\n}];"
+      },
+      "id": "48abbd91-f733-4803-8373-b331c6ba68fa",
+      "name": "Customer Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "1a1ad48a-776e-4ac2-b67b-d41b3ca4696a",
+      "name": "Customer Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/customers?select=id",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"phone_number\":\"{{ $json.from }}\",\"full_name\":\"{{ $json.profileName }}\",\"lead_stage\":\"new\",\"source\":\"whatsapp\",\"created_at\":\"{{ new Date().toISOString() }}\"}",
+        "options": {}
+      },
+      "id": "089f884d-14e8-4441-9065-7bd36e8e6dd9",
+      "name": "Create Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let customerId = null;\nconst input = $input.first().json;\nconst fromData = $('Customer Check').item.json;\nif (Array.isArray(input) && input.length > 0 && input[0].id) customerId = input[0].id;\nelse if (input && input.id) customerId = input.id;\nif (!customerId) customerId = fromData.customerId;\nreturn [{ json: { customerId, from: fromData.from, phoneNumberId: fromData.phoneNumberId, text: fromData.text } }];"
+      },
+      "id": "2ebc068d-743c-4b1b-881e-a3a152e6edee",
+      "name": "Merge Customer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/conversations?customer_id=eq.{{ $json.customerId }}&channel=eq.whatsapp&status=eq.open&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b3d0c4e5-a077-4749-8d79-6a8419d09e93",
+      "name": "Find Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2256,
+        208
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const convs = $input.first().json;\nconst exists = Array.isArray(convs) && convs.length > 0;\nlet conversationId = null;\nif (exists) conversationId = convs[0].id;\nconst fromData = $('Merge Customer').item.json;\nreturn [{ json: { exists, conversationId, customerId: fromData.customerId, from: fromData.from, phoneNumberId: fromData.phoneNumberId, text: fromData.text } }];"
+      },
+      "id": "6d7b687f-5a40-4592-aa94-f6bc2737cb56",
+      "name": "Conversation Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2512,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "93593e4a-0e2c-43af-a61a-99a91a944bd3",
+      "name": "Conversation Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2752,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/conversations?select=id",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"customer_id\":\"{{ $json.customerId }}\",\"channel\":\"whatsapp\",\"status\":\"open\",\"created_at\":\"{{ new Date().toISOString() }}\"}",
+        "options": {}
+      },
+      "id": "7c79dd8a-5d66-4e79-9129-ddf213dc4242",
+      "name": "Create Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3008,
+        352
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// الكود المحسن لـ Merge Conversation\nconst input = $input.all();\nlet convId = null;\n\n// محاولة جلب الـ ID من نود Create Conversation إذا كانت المحادثة جديدة\ntry {\n    const createConv = $('Create Conversation').item.json;\n    if (createConv && createConv.id) {\n        convId = createConv.id;\n    }\n} catch (e) {\n    // تجاهل الخطأ إذا لم يتم تشغيل نود Create Conversation\n}\n\n// إذا لم نجدها، نحاول البحث في الـ Input (إذا كانت المحادثة موجودة مسبقاً)\nif (!convId && input.length > 0) {\n    convId = input[0].json.conversationId || input[0].json.id;\n}\n\nconst customerId = $('Conversation Check').item.json.customerId;\n\nif (!convId || !customerId) {\n    throw new Error('لم يتم العثور على conversationId أو customerId. تأكد من توصيل مسار False Branch بـ Create Conversation.');\n}\n\nreturn [{\n    json: {\n        conversationId: convId,\n        customerId: customerId,\n        from: $('Conversation Check').item.json.from,\n        phoneNumberId: $('Conversation Check').item.json.phoneNumberId,\n        text: $('Conversation Check').item.json.text\n    }\n}];"
+      },
+      "id": "ecd8c92d-677b-4e96-a720-292667fb9de1",
+      "name": "Merge Conversation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"conversation_id\":\"{{ $json.conversationId }}\",\"direction\":\"inbound\",\"content\":\"{{ $json.text }}\",\"content_type\":\"text\",\"is_ai_generated\":false,\"created_at\":\"{{ new Date().toISOString() }}\"}",
+        "options": {}
+      },
+      "id": "306bef30-f6b8-4653-8029-e05d3935546d",
+      "name": "Save User Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3504,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api-proxy",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-app-proxy",
+              "value": "={{ $env.PROXY_HEADER }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"originalUrl\": \"https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent\", \"method\": \"POST\", \"body\": {\"contents\":[{\"parts\":[{\"text\":\"أنت وكيل مبيعات لـ CVPro.ae (الإمارات). الأسعار: Essential CV 399 درهم، LinkedIn Pro 299 درهم، Career Boost 599 درهم. ردود قصيرة ومفيدة.\\nالرسالة: {{ $json.text }}\"}]}]} }",
+        "options": {}
+      },
+      "id": "fc9e818d-bc64-4167-bc2f-b2f0a719c92b",
+      "name": "Call Gemini AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3760,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiOutput = $input.first().json;\nconst replyText = geminiOutput.candidates?.[0]?.content?.parts?.[0]?.text || \"شكراً لتواصلك مع CVPro.ae! كيف يمكنني مساعدتك اليوم؟ 😊\";\nconst prev = $('Merge Conversation').item.json;\nreturn [{ json: { reply: replyText, to: prev.from, phoneNumberId: prev.phoneNumberId, conversationId: prev.conversationId } }];"
+      },
+      "id": "1acd1e56-3a2a-4d3c-b171-080c5f7927b7",
+      "name": "Parse AI Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1152244467965182/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAOGrGq8c2cBRkXmChRkhiZCCMRXBrVSLzxfXC92cWQUl3e9kp49xtccd9Eh1wvZCeknVgx2YuroawFyJ2QrWP5D5zfsnN6nbaVrGxmIcnivAyPgtHtLkMdYgSyJQA3FeXDDGGqJ5gq3xBcLDIfyhxaBF7n16HhuMZAZCZBkdk6GXVnZA1ojIhFkaGoHaFJgZDZD"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"messaging_product\":\"whatsapp\",\"to\":\"{{ $json.to }}\",\"type\":\"text\",\"text\":{\"body\":\"{{ $json.reply }}\"}}",
+        "options": {}
+      },
+      "id": "8e49a330-a9d2-4c55-8a4b-9307d7952ac8",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4256,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://thnbpnhnjgazugdgcpys.supabase.co/rest/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRobmJwbmhuamdhenVnZGdjcHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNjAzNCwiZXhwIjoyMDk1ODEyMDM0fQ.LvmS5eLc8f9T9nyWmAyxF-KORSrpizPqpnx36KsqyCQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"conversation_id\":\"{{ $json.conversationId }}\",\"direction\":\"outbound\",\"content\":\"{{ $json.reply }}\",\"content_type\":\"text\",\"is_ai_generated\":true,\"ai_model\":\"gemini-2.5-flash\",\"created_at\":\"{{ new Date().toISOString() }}\"}",
+        "options": {}
+      },
+      "id": "2c79cac8-a73b-4a93-bb8e-cf2ae896a132",
+      "name": "Save AI Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4512,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Verify Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Token": {
+      "main": [
+        [
+          {
+            "node": "Return Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Webhook (POST)": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          {
+            "node": "Build Customer URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Customer URL": {
+      "main": [
+        [
+          {
+            "node": "Find Customer (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Customer (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Customer Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Check": {
+      "main": [
+        [
+          {
+            "node": "Customer Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Exists?": {
+      "main": [
+        [
+          {
+            "node": "Merge Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Customer": {
+      "main": [
+        [
+          {
+            "node": "Merge Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Customer": {
+      "main": [
+        [
+          {
+            "node": "Find Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Conversation": {
+      "main": [
+        [
+          {
+            "node": "Conversation Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Check": {
+      "main": [
+        [
+          {
+            "node": "Conversation Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Exists?": {
+      "main": [
+        [
+          {
+            "node": "Merge Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Conversation": {
+      "main": [
+        [
+          {
+            "node": "Merge Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Conversation": {
+      "main": [
+        [
+          {
+            "node": "Save User Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Gemini AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User Message": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini AI": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Reply": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reply": {
+      "main": [
+        [
+          {
+            "node": "Save AI Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ],
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ad53e35f-b3b8-4245-8b0d-b08318bc7302",
+  "meta": {
+    "instanceId": "479c225104228112eed4d8ec14cdbb65aee236860143f7493dc69aef52ae8b2e"
+  },
+  "nodeGroups": [],
+  "id": "1f7hD4GBbAzZVjp6",
+  "tags": []
+}

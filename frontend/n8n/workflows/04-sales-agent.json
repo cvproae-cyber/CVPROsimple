@@ -1,0 +1,82 @@
+{
+  "name": "04-Sales-Agent",
+  "active": true,
+  "nodes": [
+    {
+      "name": "Receive Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {}
+    },
+    {
+      "name": "Get Customer History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT direction, content FROM messages WHERE customer_id = '{{$('Receive Input').item.json.id}}' ORDER BY created_at DESC LIMIT 10;"
+      }
+    },
+    {
+      "name": "Format History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "jsCode": "const history = $input.all().reverse().map(i => `${i.json.direction === 'inbound' ? 'Customer' : 'AI'}: ${i.json.content}`).join('\\n');\nreturn [{ json: { history, message: $('Extract Message').item.json.message, phone: $('Extract Message').item.json.phone } }];"
+      }
+    },
+    {
+      "name": "Gemini AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "key", "value": "={{$env.GEMINI_API_KEY}}"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"contents\":[{\"parts\":[{\"text\":\"You are the AI sales assistant for CVPro.ae, a professional CV writing service for the UAE and Gulf market. You speak Arabic and English. Be warm, professional, and focus on converting leads. Customer history:\\n{{$json.history}}\\n\\nCustomer message: {{$json.message}}\\n\\nRespond naturally, offer a free CV assessment, and guide toward purchase.\"}]}]}"
+      }
+    },
+    {
+      "name": "Extract Reply",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1250, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"name": "ai_reply", "value": "={{$json.candidates[0].content.parts[0].text}}", "type": "string"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Lead Score",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1500, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET buying_intent_score = LEAST(buying_intent_score + 5, 100), last_intent = '{{$('Format History').item.json.message}}' WHERE phone_number = '{{$('Format History').item.json.phone}}';"
+      }
+    }
+  ],
+  "connections": {
+    "Receive Input": {"main": [[{"node": "Get Customer History", "type": "main", "index": 0}]]},
+    "Get Customer History": {"main": [[{"node": "Format History", "type": "main", "index": 0}]]},
+    "Format History": {"main": [[{"node": "Gemini AI", "type": "main", "index": 0}]]},
+    "Gemini AI": {"main": [[{"node": "Extract Reply", "type": "main", "index": 0}]]},
+    "Extract Reply": {"main": [[{"node": "Update Lead Score", "type": "main", "index": 0}]]}
+  },
+  "settings": { "executionOrder": "v1" }
+}
