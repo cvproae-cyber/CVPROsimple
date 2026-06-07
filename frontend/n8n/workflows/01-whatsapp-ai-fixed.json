@@ -403,7 +403,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.BACKEND_URL }}/api-proxy",
+        "url": "={{ $env.BACKEND_URL.replace(/\/$/, '') }}/api-proxy",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
