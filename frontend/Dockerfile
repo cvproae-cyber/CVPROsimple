@@ -1,5 +1,5 @@
 # المرحلة الأولى: بناء تطبيق React
-FROM node:18-slim AS build
+FROM node:20-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -14,7 +14,7 @@ ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 RUN npm run build
 
 # المرحلة الثانية: إعداد خادم التشغيل
-FROM node:18-slim
+FROM node:20-slim
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server.js ./
