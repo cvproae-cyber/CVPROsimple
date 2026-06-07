@@ -1,0 +1,17 @@
+steps:
+  # بناء الصورة باستخدام Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '--build-arg', 'VITE_SUPABASE_URL=${_VITE_SUPABASE_URL}',
+      '--build-arg', 'VITE_SUPABASE_ANON_KEY=${_VITE_SUPABASE_ANON_KEY}',
+      '-t', 'me-west1-docker.pkg.dev/${PROJECT_ID}/cvpro-repo/frontend:v1',
+      '.'
+    ]
+
+# رفع الصورة إلى Artifact Registry
+images:
+  - 'me-west1-docker.pkg.dev/${PROJECT_ID}/cvpro-repo/frontend:v1'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
