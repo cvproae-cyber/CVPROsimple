@@ -39,7 +39,12 @@ app.post('/api-proxy', async (req, res) => {
 
     response.data.pipe(res);
   } catch (error) {
-    console.error('API Proxy Error:', error.message);
+    console.error('API Proxy Error:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
     res.status(error.response?.status || 500).send(error.response?.data || 'Proxy Error');
   }
 });
