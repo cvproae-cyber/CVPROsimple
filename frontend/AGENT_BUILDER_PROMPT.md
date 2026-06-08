@@ -9,16 +9,15 @@ write all code, and only ask the user when you need a secret value.
 
 ### PHASE 1 — Deploy n8n on Cloud Run
 
-1. Create a Cloud Run service named `cvpro-n8n` in region `me-west1` (Tel Aviv, closest to UAE).
+1. Create a Cloud Run service named `cvpro-n8n` in region `me-west1`.
 2. Use the official n8n Docker image: `docker.n8n.io/n8nio/n8n:latest`
 3. Set these environment variables on the service:
    - N8N_PORT=8080
    - N8N_PROTOCOL=https
-   - N8N_HOST=[auto-detect from Cloud Run URL]
-   - WEBHOOK_URL=[Cloud Run service URL]
    - N8N_ENCRYPTION_KEY=[generate a random 32-char string and store in Secret Manager as `n8n-encryption-key`]
    - DB_TYPE=postgresdb
-   - DB_POSTGRESDB_HOST=[Cloud SQL private IP]
+   - DB_POSTGRESDB_HOST=127.0.0.1
+   - DB_POSTGRESDB_PORT=5432
    - DB_POSTGRESDB_DATABASE=n8n
    - DB_POSTGRESDB_USER=n8n_user
    - DB_POSTGRESDB_PASSWORD=[from Secret Manager: `cloudsql-n8n-password`]
@@ -27,10 +26,11 @@ write all code, and only ask the user when you need a secret value.
    - N8N_BASIC_AUTH_PASSWORD=[from Secret Manager: `n8n-admin-password`]
    - EXECUTIONS_PROCESS=main
    - N8N_PUSH_BACKEND=sse
-4. Set minimum instances to 1 (always warm), max 3.
-5. Set memory to 1Gi, CPU to 1.
-6. Allow unauthenticated traffic (required for webhooks).
-7. After deploy, output the Cloud Run URL — this is the n8n base URL.
+4. **Cloud SQL Proxy:** Enable the Cloud SQL connection on the Cloud Run service to `cvpro-postgres`.
+5. Set minimum instances to 1 (to avoid cold starts for webhooks), max 5.
+6. Set memory to 2Gi, CPU to 1 (n8n requires more RAM for heavy AI workflows).
+7. Allow unauthenticated traffic (required for Meta Webhooks).
+8. After deploy, output the Cloud Run URL — this is the n8n base URL.
 
 ---
 
