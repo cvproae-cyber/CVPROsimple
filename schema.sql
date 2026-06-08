@@ -1,3 +1,6 @@
+-- Ensure UUID extension is available
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- جدول العملاء
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -16,13 +19,16 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID REFERENCES customers(id),
-    status TEXT DEFAULT 'open',
+    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'closed', 'pending', 'archived')),
     human_takeover BOOLEAN DEFAULT FALSE,
     channel TEXT DEFAULT 'whatsapp',
     last_message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Index for faster joins between customers and conversations
+CREATE INDEX IF NOT EXISTS idx_conversations_customer_id ON conversations(customer_id);
 
 -- جدول الرسائل
 CREATE TABLE IF NOT EXISTS messages (
@@ -34,6 +40,10 @@ CREATE TABLE IF NOT EXISTS messages (
     is_ai_generated BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Indexes for faster message retrieval
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_customer_id ON messages(customer_id);
 
 -- وظيفة تحديث التوقيت تلقائياً
 CREATE OR REPLACE FUNCTION update_modified_column()
