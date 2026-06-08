@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS customers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول المحادثات
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID REFERENCES customers(id),
@@ -24,7 +23,6 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول الرسائل
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID REFERENCES conversations(id),
@@ -35,7 +33,6 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- إضافة بيانات تجريبية لاختبار الفرونت إند
 INSERT INTO customers (full_name, phone_number, lead_stage, ltv_aed)
 VALUES ('Ahmed Test', '+971500000000', 'new', 500)
 ON CONFLICT (phone_number) DO NOTHING;
@@ -45,9 +42,6 @@ SELECT id, 'Hello, I need help with my CV', 'open' FROM customers
 WHERE phone_number = '+971500000000'
 ON CONFLICT DO NOTHING;
 
--- ملاحظة: تم حذف التكرار في التريجرز والرؤى لضمان نظافة الكود
-
--- وظيفة تحديث التوقيت تلقائياً
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -56,14 +50,12 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- ربط التريجر بالجداول (نستخدم DROP لتجنب خطأ التكرار)
 DROP TRIGGER IF EXISTS update_customers_modtime ON customers;
 CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 DROP TRIGGER IF EXISTS update_conversations_modtime ON conversations;
 CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- إنشاء View لتلخيص المحادثات مع بيانات العملاء
 CREATE OR REPLACE VIEW conversation_summary AS
 SELECT 
     conv.id AS conversation_id,

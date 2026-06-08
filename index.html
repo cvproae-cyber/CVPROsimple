@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة تحكم CVPRO</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .status { font-weight: bold; color: green; }
+    </style>
+</head>
+<body>
+    <h1>المحادثات المباشرة (من قاعدة البيانات)</h1>
+    <div id="conversations-list">تحميل البيانات...</div>
+
+    <script type="module">
+        import { getConversations } from './apiService.js';
+
+        async function loadData() {
+            const list = document.getElementById('conversations-list');
+            const data = await getConversations();
+            
+            if (data.length === 0) {
+                list.innerHTML = '<p>لا توجد محادثات حالياً.</p>';
+                return;
+            }
+
+            list.innerHTML = data.map(conv => `
+                <div class="card">
+                    <h3>${conv.full_name} (${conv.phone_number})</h3>
+                    <p>آخر رسالة: ${conv.last_message}</p>
+                    <p>الحالة: <span class="status">${conv.status}</span></p>
+                </div>
+            `).join('');
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
