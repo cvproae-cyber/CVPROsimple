@@ -22,4 +22,16 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+// إضافة مستمع للأخطاء لمنع انهيار السيرفر عند فشل الاتصال
+pool.on('error', (err, client) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
+// اختبار الاتصال عند بدء التشغيل
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) console.error('Initial Database connection error:', err.stack);
+  else console.log('Database connected successfully at:', res.rows[0].now);
+});
+
 module.exports = pool;
