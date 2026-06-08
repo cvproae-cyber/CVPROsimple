@@ -5,7 +5,7 @@ const API_URL = window.location.hostname === 'localhost'
 // وظيفة لتوحيد شكل البيانات (Normalization)
 const normalizeConversation = (conv) => ({
     id: conv.id,
-    customerName: conv.customer_name || 'عميل غير معروف',
+    fullName: conv.customer_name || 'عميل غير معروف',
     lastMessage: conv.last_message || 'لا توجد رسائل',
     status: conv.status,
     isHuman: !!conv.human_takeover, // التأكد من تحويلها لـ Boolean

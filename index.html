@@ -32,7 +32,7 @@
             list.innerHTML = data.map(conv => `
                 <div class="card">
                     <h3>
-                        ${conv.customerName} (${conv.phoneNumber})
+                        ${conv.fullName} (${conv.phoneNumber})
                         <span class="badge ${conv.isHuman ? 'badge-human' : 'badge-ai'}">
                             ${conv.isHuman ? 'HUMAN' : 'AI'}
                         </span>
