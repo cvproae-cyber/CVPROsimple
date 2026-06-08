@@ -10,7 +10,7 @@ COPY frontend/package*.json ./
 # تثبيت المكتبات
 RUN npm install
 
-# نسخ كود المشروع بالكامل من مجلد frontend إلى مجلد العمل
+# نسخ كود المشروع بالكامل من مجلد frontend إلى مجلد العمل داخل الحاوية
 COPY frontend/ .
 
 # بناء ملفات الفرونت-إند (Vite build) لإنشاء مجلد dist

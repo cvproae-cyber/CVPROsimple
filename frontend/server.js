@@ -19,7 +19,11 @@ if (!process.env.DB_HOST) {
 
 // Middleware configuration
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'dist')));
+
+const distPath = path.join(__dirname, 'dist');
+if (express.static(distPath)) {
+  app.use(express.static(distPath));
+}
 
 // Cloud SQL Connection Configuration
 const { Pool } = pg;
@@ -296,7 +300,12 @@ app.use('/ws-proxy', wsProxy);
 
 // معالجة مسارات React (SPA)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  if (path.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Frontend build not found. Please run "npm run build" first.');
+  }
 });
 
 app.listen(PORT, () => {

@@ -7,7 +7,7 @@ export function subscribeToMessages(callback: (payload: any) => void) {
 }
 
 // ==========================================
-// SUPABASE DATABASE FUNCTIONS
+// CLOUD SQL DATABASE FUNCTIONS
 // ==========================================
 
 export async function fetchCustomers(): Promise<Customer[]> {
