@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import pg from 'pg';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,7 +22,7 @@ if (!process.env.DB_HOST) {
 app.use(express.json({ limit: '10mb' }));
 
 const distPath = path.join(__dirname, 'dist');
-if (express.static(distPath)) {
+if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
 
@@ -305,7 +306,7 @@ app.use('/ws-proxy', wsProxy);
 // معالجة مسارات React (SPA)
 app.get('*', (req, res) => {
   const indexPath = path.join(__dirname, 'dist', 'index.html');
-  if (path.existsSync(indexPath)) {
+  if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
     res.status(404).send('Frontend build not found. Please run "npm run build" first.');
