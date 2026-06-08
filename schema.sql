@@ -41,3 +41,53 @@ VALUES ('Ahmed Test', '+971500000000', 'new', 500);
 
 INSERT INTO conversations (customer_id, last_message, status) 
 SELECT id, 'Hello, I need help with my CV', 'open' FROM customers LIMIT 1;
+
+-- وظيفة تحديث التوقيت تلقائياً (تأكد من تشغيل هذا الجزء في Query Editor)
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- ربط التريجر بالجداول (لضمان تحديث updated_at يدوياً)
+CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- إنشاء View لتلخيص المحادثات (هذا ما سيطلبه الفرونت إند)
+CREATE OR REPLACE VIEW conversation_summary AS
+SELECT 
+    conv.id AS conversation_id,
+    cust.full_name,
+    cust.phone_number,
+    conv.status,
+    conv.last_message,
+    conv.updated_at
+FROM conversations conv
+JOIN customers cust ON conv.customer_id = cust.id;
+
+-- وظيفة تحديث التوقيت تلقائياً
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- ربط التريجر بالجداول
+CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- إنشاء View لتلخيص المحادثات مع بيانات العملاء
+CREATE OR REPLACE VIEW conversation_summary AS
+SELECT 
+    conv.id AS conversation_id,
+    cust.full_name,
+    cust.phone_number,
+    conv.status,
+    conv.last_message,
+    conv.updated_at
+FROM conversations conv
+JOIN customers cust ON conv.customer_id = cust.id;
