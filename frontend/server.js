@@ -90,7 +90,11 @@ app.get('/api/customers', async (req, res) => {
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    console.error('DATABASE_ERROR_REPORT:', {
+      message: error.message,
+      stack: error.stack,
+      config: { host: process.env.DB_HOST, user: process.env.DB_USER, db: process.env.DB_NAME }
+    });
     res.status(500).json({ error: error.message });
   }
 });
