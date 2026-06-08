@@ -1,9 +1,10 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { CVAnalysisResult } from '../types';
 
 // Initialize the SDK. Assumes process.env.API_KEY is available in the environment.
 const API_KEY = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey: API_KEY, vertexai: true });
+const genAI = new GoogleGenerativeAI(API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 export async function analyzeCVText(cvText: string): Promise<CVAnalysisResult> {
   if (!API_KEY) {
@@ -19,34 +20,33 @@ export async function analyzeCVText(cvText: string): Promise<CVAnalysisResult> {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // Updated to current stable version
-      contents: prompt,
-      config: {
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
             score: {
-              type: Type.INTEGER,
+              type: SchemaType.INTEGER,
               description: 'Overall ATS compatibility score from 0 to 100.',
             },
             strengths: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING },
               description: 'List of key strengths found in the CV.',
             },
             weaknesses: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING },
               description: 'List of weaknesses or areas for improvement.',
             },
             sales_pitch: {
-              type: Type.STRING,
+              type: SchemaType.STRING,
               description: 'A short, persuasive pitch (max 50 words) to convince the candidate to buy a CV writing service based on their weaknesses.',
             },
             personalized_offer: {
-              type: Type.STRING,
+              type: SchemaType.STRING,
               description: 'A personalized discount code or offer (e.g., "USE CODE PRO20 for 20% off").',
             },
           },
@@ -55,8 +55,9 @@ export async function analyzeCVText(cvText: string): Promise<CVAnalysisResult> {
       },
     });
 
-    if (response.text) {
-      return JSON.parse(response.text) as CVAnalysisResult;
+    const responseText = result.response.text();
+    if (responseText) {
+      return JSON.parse(responseText) as CVAnalysisResult;
     }
     throw new Error("Empty response from model");
   } catch (error) {
@@ -82,15 +83,14 @@ export async function generateChatReply(historyText: string, userMessage: string
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-      config: {
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
         systemInstruction: systemInstruction,
         temperature: 0.7,
       }
     });
-    return response.text || "I'm sorry, I couldn't process that.";
+    return result.response.text() || "I'm sorry, I couldn't process that.";
   } catch (error) {
     console.error("Error generating chat reply:", error);
     return "Sorry, I am having trouble connecting to my brain right now.";

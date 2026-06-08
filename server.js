@@ -7,13 +7,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// إعداد الاتصال بقاعدة البيانات بناءً على الجدول المزود
-const pool = new Pool({
-  user: 'postgres',
-  host: '127.0.0.1',
-  database: 'cvpro_db',
-  password: process.env.DB_PASSWORD, // يتم جلبها من Secret Manager أو .env
-  port: 9470,
+// Database connection configuration
+let dbConfig = {
+  user: process.env.DB_USER || 'postgres',
+  database: process.env.DB_NAME || 'cvpro_db',
+  password: process.env.DB_PASSWORD,
+};
+
+if (process.env.INSTANCE_CONNECTION_NAME) {
+  dbConfig.host = `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`;
+} else {
+  dbConfig.host = '127.0.0.1';
+  dbConfig.port = 9470;
+}
+
+const pool = new Pool(dbConfig);
+
+// Graceful shutdown for Cloud Run
+process.on('SIGTERM', () => {
+  pool.end(() => {
+    console.log('Database pool closed');
+    process.exit(0);
+  });
 });
 
 // نقطة نهاية لجلب ملخص المحادثات من الـ View التي أنشأناها
