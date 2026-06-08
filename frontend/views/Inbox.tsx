@@ -28,17 +28,17 @@ export const Inbox: React.FC = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConv = conversations.find(c => c.id === selectedId);
+  // AI is enabled when human_takeover is false
+  const aiEnabled = selectedConv ? !selectedConv.human_takeover : false;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, []);
 
-  // Load messages when a conversation is selected
   useEffect(() => {
     if (selectedId) {
       loadMessages(selectedId);
@@ -58,7 +58,7 @@ export const Inbox: React.FC = () => {
       if (data.length > 0) {
         setConversations(data);
       } else {
-        setConversations(MOCK_CONVERSATIONS); // Fallback
+        setConversations(MOCK_CONVERSATIONS);
       }
     } catch (error) {
       console.error(error);
@@ -74,7 +74,7 @@ export const Inbox: React.FC = () => {
       if (data.length > 0) {
         setMessages(data);
       } else {
-        setMessages(MOCK_MESSAGES[convId] || []); // Fallback
+        setMessages(MOCK_MESSAGES[convId] || []);
       }
     } catch (error) {
       console.error(error);
@@ -90,23 +90,18 @@ export const Inbox: React.FC = () => {
     setIsSending(true);
 
     try {
-      // 1. Save to Supabase
-      await insertOutboundMessage(selectedId, selectedConv.customerId, textToSend);
+      await insertOutboundMessage(selectedId, selectedConv.customer_id, textToSend);
       
-      // 2. Optimistically update UI
       const newUserMsg: Message = {
         id: Date.now().toString(),
-        conversationId: selectedId,
+        conversation_id: selectedId,
+        customer_id: selectedConv.customer_id,
         content: textToSend,
         direction: 'outbound',
-        isAiGenerated: false,
-        timestamp: new Date().toISOString()
+        is_ai_generated: false,
+        created_at: new Date().toISOString()
       };
       setMessages(prev => [...prev, newUserMsg]);
-
-      // Note: In a real architecture, n8n would listen to the Supabase DB insert 
-      // via a webhook or polling, and then send the actual WhatsApp message via Meta API.
-      // Alternatively, you could call `triggerN8nWebhook` here directly.
 
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -119,21 +114,19 @@ export const Inbox: React.FC = () => {
   const handleToggleAI = async () => {
     if (!selectedId || !selectedConv) return;
     
-    const newAiState = !selectedConv.aiEnabled;
-    
+    const newHumanTakeover = !selectedConv.human_takeover; // toggle
     // Optimistic update
     setConversations(prev => prev.map(c => 
-      c.id === selectedId ? { ...c, aiEnabled: newAiState } : c
+      c.id === selectedId ? { ...c, human_takeover: newHumanTakeover } : c
     ));
 
     try {
-      // Update Supabase (human_takeover = !aiEnabled)
-      await toggleHumanTakeover(selectedId, !newAiState);
+      await toggleHumanTakeover(selectedId, newHumanTakeover);
     } catch (error) {
       console.error("Failed to toggle AI:", error);
       // Revert on failure
       setConversations(prev => prev.map(c => 
-        c.id === selectedId ? { ...c, aiEnabled: !newAiState } : c
+        c.id === selectedId ? { ...c, human_takeover: !newHumanTakeover } : c
       ));
     }
   };
@@ -157,24 +150,27 @@ export const Inbox: React.FC = () => {
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
-          ) : conversations.map(conv => (
-            <div 
-              key={conv.id}
-              onClick={() => setSelectedId(conv.id)}
-              className={`p-4 border-b border-border cursor-pointer hover:bg-secondary/50 transition-colors ${selectedId === conv.id ? 'bg-secondary/50 border-l-4 border-l-primary' : ''}`}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <span className="font-semibold text-sm">{conv.customerName}</span>
-                <div className="flex items-center gap-2">
-                  <Badge variant={conv.aiEnabled ? 'default' : 'outline'} className="text-[10px] px-1.5 py-0 h-4">
-                    {conv.aiEnabled ? 'AI' : 'HUMAN'}
-                  </Badge>
-                  <ChannelIcon channel={conv.channel} className="w-4 h-4" />
+          ) : conversations.map(conv => {
+            const convAiEnabled = !conv.human_takeover;
+            return (
+              <div 
+                key={conv.id}
+                onClick={() => setSelectedId(conv.id)}
+                className={`p-4 border-b border-border cursor-pointer hover:bg-secondary/50 transition-colors ${selectedId === conv.id ? 'bg-secondary/50 border-l-4 border-l-primary' : ''}`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="font-semibold text-sm">{conv.customer_name}</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={convAiEnabled ? 'default' : 'outline'} className="text-[10px] px-1.5 py-0 h-4">
+                      {convAiEnabled ? 'AI' : 'HUMAN'}
+                    </Badge>
+                    <ChannelIcon channel={conv.channel} className="w-4 h-4" />
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground truncate" dir="auto">{conv.last_message}</p>
               </div>
-              <p className="text-xs text-muted-foreground truncate" dir="auto">{conv.lastMessage}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -185,15 +181,15 @@ export const Inbox: React.FC = () => {
             {/* Header */}
             <div className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="font-semibold">{selectedConv.customerName}</div>
+                <div className="font-semibold">{selectedConv.customer_name}</div>
                 <ChannelIcon channel={selectedConv.channel} className="w-5 h-5" />
               </div>
               <Button 
-                variant={selectedConv.aiEnabled ? 'outline' : 'default'} 
+                variant={aiEnabled ? 'outline' : 'default'} 
                 size="sm"
                 onClick={handleToggleAI}
               >
-                {selectedConv.aiEnabled ? (
+                {aiEnabled ? (
                   <><User className="w-4 h-4 mr-2" /> Take Over (Human)</>
                 ) : (
                   <><Bot className="w-4 h-4 mr-2" /> Enable AI Agent</>
@@ -211,7 +207,7 @@ export const Inbox: React.FC = () => {
                       {msg.content}
                     </div>
                     <span className="text-[10px] text-muted-foreground mt-1 px-1">
-                      {isOutbound ? (msg.isAiGenerated ? 'AI Agent' : 'You') : selectedConv.customerName}
+                      {isOutbound ? (msg.is_ai_generated ? 'AI Agent' : 'You') : selectedConv.customer_name}
                     </span>
                   </div>
                 );
@@ -222,7 +218,7 @@ export const Inbox: React.FC = () => {
             {/* Input */}
             <div className="p-4 bg-card border-t border-border">
               <div className="text-xs text-muted-foreground mb-2">
-                {selectedConv.aiEnabled ? "AI is active. Taking over will disable AI." : "Type message as human agent..."}
+                {aiEnabled ? "AI is active. Taking over will disable AI." : "Type message as human agent..."}
               </div>
               <div className="flex gap-2">
                 <Input 

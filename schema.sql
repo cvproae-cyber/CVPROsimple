@@ -35,8 +35,6 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ملاحظة: تم حذف التكرار في التريجرز والرؤى لضمان نظافة الكود
-
 -- وظيفة تحديث التوقيت تلقائياً
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
@@ -46,19 +44,21 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- ربط التريجر بالجداول (نستخدم DROP لتجنب خطأ التكرار)
+-- ربط التريجر بالجداول
 DROP TRIGGER IF EXISTS update_customers_modtime ON customers;
 CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 DROP TRIGGER IF EXISTS update_conversations_modtime ON conversations;
 CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- تعديل الـ View لتتوافق مع المسميات المطلوبة في الطلب الجديد
+-- View مع تضمين channel
 CREATE OR REPLACE VIEW conversation_summary AS
 SELECT 
-    conv.id AS id,
+    conv.id,
+    conv.customer_id,
     cust.full_name AS customer_name,
     cust.phone_number,
+    conv.channel,
     conv.status,
     conv.last_message,
     conv.human_takeover,

@@ -29,8 +29,8 @@ export const Contacts: React.FC = () => {
   };
 
   const filteredContacts = customers.filter(c => {
-    const matchesSearch = c.fullName.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
-    const matchesStage = stageFilter === 'all' || c.stage === stageFilter;
+    const matchesSearch = c.full_name.toLowerCase().includes(search.toLowerCase()) || c.phone_number.includes(search);
+    const matchesStage = stageFilter === 'all' || c.lead_stage === stageFilter;
     return matchesSearch && matchesStage;
   });
 
@@ -76,7 +76,6 @@ export const Contacts: React.FC = () => {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Channel</TableHead>
               <TableHead>Stage</TableHead>
               <TableHead>Intent</TableHead>
               <TableHead>Language</TableHead>
@@ -86,30 +85,29 @@ export const Contacts: React.FC = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading contacts...</TableCell>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading contacts...</TableCell>
               </TableRow>
             ) : filteredContacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No contacts found.</TableCell>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No contacts found.</TableCell>
               </TableRow>
             ) : (
               filteredContacts.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
-                    <div>{c.fullName}</div>
-                    <div className="text-xs text-muted-foreground">{c.phone}</div>
-                  </TableCell>
-                  <TableCell className="capitalize">{c.channel}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">{c.stage.replace('_', ' ')}</Badge>
+                    <div>{c.full_name}</div>
+                    <div className="text-xs text-muted-foreground">{c.phone_number}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={c.intentScore > 70 ? "default" : "secondary"}>{c.intentScore}</Badge>
+                    <Badge variant="outline" className="capitalize">{c.lead_stage.replace('_', ' ')}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={c.buying_intent_score > 70 ? "default" : "secondary"}>{c.buying_intent_score}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="uppercase text-[10px]">{c.language}</Badge>
                   </TableCell>
-                  <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(c.created_at).toLocaleDateString()}</TableCell>
                 </TableRow>
               ))
             )}

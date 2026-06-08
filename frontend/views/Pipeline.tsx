@@ -27,7 +27,6 @@ export const Pipeline: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await fetchCustomers();
-      // Fallback to mock data if Supabase is not configured or returns empty
       if (data.length === 0) {
         setCustomers(MOCK_CUSTOMERS);
         setError("Using mock data. Connect Cloud SQL to see real leads.");
@@ -47,15 +46,11 @@ export const Pipeline: React.FC = () => {
     }
   };
 
-  const moveCustomer = async (id: string, newStage: Customer['stage']) => {
-    // Optimistic UI update
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, stage: newStage } : c));
-    
+  const moveCustomer = async (id: string, newStage: Customer['lead_stage']) => {
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, lead_stage: newStage } : c));
     try {
-      // Update in Supabase
       await updateCustomerStage(id, newStage);
     } catch (err) {
-      // Revert on failure
       loadCustomers();
       alert("Failed to update stage in database.");
     }
@@ -89,26 +84,26 @@ export const Pipeline: React.FC = () => {
               <div className={`px-4 py-2 rounded-t-lg border-t border-x font-semibold text-sm ${stage.color}`}>
                 {stage.name}
                 <span className="ml-2 text-xs opacity-70">
-                  ({customers.filter(c => c.stage === stage.id).length})
+                  ({customers.filter(c => c.lead_stage === stage.id).length})
                 </span>
               </div>
               <div className="flex-1 bg-card border-x border-b rounded-b-lg p-3 space-y-3 overflow-y-auto">
-                {customers.filter(c => c.stage === stage.id).map(customer => (
+                {customers.filter(c => c.lead_stage === stage.id).map(customer => (
                   <div key={customer.id} className="bg-background p-4 rounded-lg border border-border shadow-sm">
-                    <div className="font-medium text-sm mb-1">{customer.fullName}</div>
-                    <div className="text-xs text-muted-foreground mb-3">{customer.phone}</div>
+                    <div className="font-medium text-sm mb-1">{customer.full_name}</div>
+                    <div className="text-xs text-muted-foreground mb-3">{customer.phone_number}</div>
                     
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-xs text-muted-foreground">Intent Score</span>
-                      <Badge variant={customer.intentScore > 80 ? 'default' : 'secondary'} className="text-[10px]">
-                        {customer.intentScore}
+                      <Badge variant={customer.buying_intent_score > 80 ? 'default' : 'secondary'} className="text-[10px]">
+                        {customer.buying_intent_score}
                       </Badge>
                     </div>
 
                     <select 
                       className="w-full bg-secondary text-xs rounded p-1.5 border-none outline-none focus:ring-1 focus:ring-primary"
-                      value={customer.stage}
-                      onChange={(e) => moveCustomer(customer.id, e.target.value as Customer['stage'])}
+                      value={customer.lead_stage}
+                      onChange={(e) => moveCustomer(customer.id, e.target.value as Customer['lead_stage'])}
                     >
                       {stages.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
@@ -117,7 +112,7 @@ export const Pipeline: React.FC = () => {
                     </select>
                   </div>
                 ))}
-                {customers.filter(c => c.stage === stage.id).length === 0 && (
+                {customers.filter(c => c.lead_stage === stage.id).length === 0 && (
                   <div className="text-center text-xs text-muted-foreground py-4 border-2 border-dashed border-border rounded-lg">
                     No leads
                   </div>
