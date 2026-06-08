@@ -1,16 +1,9 @@
-import { supabase } from './supabaseClient';
 import { Customer, Conversation, Message, Channel, Broadcast, Template } from '../types';
 
 // دالة للاستماع للتغييرات الفورية (Realtime)
+// TODO: Migration to WebSockets or Polling via Node.js Backend
 export function subscribeToMessages(callback: (payload: any) => void) {
-  return supabase
-    .channel('public:messages')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages' },
-      (payload) => callback(payload)
-    )
-    .subscribe();
+  console.warn('Realtime subscription currently disabled - pending backend migration');
 }
 
 // ==========================================
@@ -18,28 +11,19 @@ export function subscribeToMessages(callback: (payload: any) => void) {
 // ==========================================
 
 export async function fetchCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase
-    .from('customers')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
+  try {
+    const response = await fetch('/api/customers'); // Example path for new backend
+    if (!response.ok) throw new Error('Failed to fetch customers');
+    const data = await response.json();
+    return data.map((d: any) => ({
+      id: d.id,
+      fullName: d.full_name || 'Unknown',
+      // ... mapping logic
+    }));
+  } catch (error) {
     console.error('Error fetching customers:', error);
     return [];
   }
-
-  return data.map((d: any) => ({
-    id: d.id,
-    fullName: d.full_name || 'Unknown',
-    phone: d.phone_number || '',
-    channel: 'whatsapp' as Channel, // Defaulting for UI mapping
-    stage: d.lead_stage || 'new',
-    intentScore: d.buying_intent_score || 0,
-    language: d.language || 'ar',
-    country: d.country || 'AE',
-    ltvAED: d.ltv_aed || 0,
-    createdAt: d.created_at
-  }));
 }
 
 export async function updateCustomerStage(id: string, stage: string): Promise<void> {

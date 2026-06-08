@@ -3,6 +3,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
+import pg from 'pg';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,6 +13,38 @@ const PORT = process.env.PORT || 8080;
 // Middleware configuration
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
+
+// Cloud SQL Connection Configuration
+const { Pool } = pg;
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT || 5432,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Export pool for use in other routes later
+export { pool };
+
+// Test Database Connection Endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW() as current_time, 1 as test_connection');
+    res.json({
+      status: 'success',
+      message: 'Connected to Google Cloud SQL successfully!',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Database Connection Error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 
 // Vertex AI Proxy Endpoint
 app.post('/api-proxy', async (req, res) => {
