@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
@@ -9,6 +10,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// تأكيد قراءة المتغيرات البيئية عند التشغيل
+if (!process.env.DB_HOST) {
+  console.error('CRITICAL ERROR: Database environment variables are missing!');
+  process.exit(1);
+}
 
 // Middleware configuration
 app.use(express.json({ limit: '10mb' }));
