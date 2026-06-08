@@ -1,149 +1,79 @@
-import { Customer, Conversation, Message, Channel, Broadcast, Template } from '../types';
+import { Customer, Conversation, Message, Broadcast, Template } from '../types';
 
-// دالة للاستماع للتغييرات الفورية (Realtime)
-// TODO: Migration to WebSockets or Polling via Node.js Backend
-export function subscribeToMessages(callback: (payload: any) => void) {
-  console.warn('Realtime subscription currently disabled - pending backend migration');
-}
-
-// ==========================================
-// CLOUD SQL DATABASE FUNCTIONS
-// ==========================================
+// ============================================
+// جميع الدوال تستخدم snake_case كما في الخلفية
+// ============================================
 
 export async function fetchCustomers(): Promise<Customer[]> {
   try {
-    const response = await fetch('/api/customers'); // Example path for new backend
-    if (!response.ok) throw new Error('Failed to fetch customers');
-    return await response.json();
+    const res = await fetch('/api/customers');
+    if (!res.ok) throw new Error('Failed to fetch customers');
+    return await res.json();
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    console.error(error);
     return [];
   }
 }
 
-export async function updateCustomerStage(id: string, stage: string): Promise<void> {
-  try {
-    const response = await fetch(`/api/customers/${id}/stage`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage })
-    });
-    if (!response.ok) throw new Error('Failed to update stage');
-  } catch (error) {
-    console.error('Error updating customer stage:', error);
-    throw error;
-  }
+export async function updateCustomerStage(id: string, lead_stage: string): Promise<void> {
+  const res = await fetch(`/api/customers/${id}/stage`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lead_stage }),
+  });
+  if (!res.ok) throw new Error('Failed to update stage');
 }
 
 export async function fetchConversations(): Promise<Conversation[]> {
-  try {
-    const response = await fetch('/api/conversations');
-    if (!response.ok) throw new Error('Failed to fetch conversations');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching conversations:', error);
-    return [];
-  }
+  const res = await fetch('/api/conversations');
+  if (!res.ok) throw new Error('Failed to fetch conversations');
+  return await res.json();
 }
 
-export async function fetchMessages(conversationId: string): Promise<Message[]> {
-  try {
-    const response = await fetch(`/api/conversations/${conversationId}/messages`);
-    if (!response.ok) throw new Error('Failed to fetch messages');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching messages:', error);
-    return [];
-  }
+export async function fetchMessages(conversation_id: string): Promise<Message[]> {
+  const res = await fetch(`/api/conversations/${conversation_id}/messages`);
+  if (!res.ok) throw new Error('Failed to fetch messages');
+  return await res.json();
 }
 
-export async function insertOutboundMessage(conversationId: string, customerId: string, content: string): Promise<void> {
-  try {
-    const response = await fetch(`/api/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId, customerId, content })
-    });
-    if (!response.ok) throw new Error('Failed to send message');
-  } catch (error) {
-    console.error('Error inserting message:', error);
-    throw error;
-  }
+export async function insertOutboundMessage(
+  conversation_id: string,
+  customer_id: string,
+  content: string
+): Promise<void> {
+  const res = await fetch('/api/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id, customer_id, content }),
+  });
+  if (!res.ok) throw new Error('Failed to send message');
 }
 
-export async function toggleHumanTakeover(conversationId: string, humanTakeover: boolean): Promise<void> {
-  try {
-    const response = await fetch(`/api/conversations/${conversationId}/ai-toggle`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ humanTakeover })
-    });
-    if (!response.ok) throw new Error('Failed to toggle AI');
-  } catch (error) {
-    console.error('Error toggling AI:', error);
-    throw error;
-  }
+export async function toggleHumanTakeover(conversation_id: string, human_takeover: boolean): Promise<void> {
+  const res = await fetch(`/api/conversations/${conversation_id}/takeover`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ human_takeover }),
+  });
+  if (!res.ok) throw new Error('Failed to toggle takeover');
 }
 
 export async function fetchBroadcasts(): Promise<Broadcast[]> {
-  try {
-    const response = await fetch('/api/broadcasts');
-    if (!response.ok) throw new Error('Failed to fetch broadcasts');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching broadcasts:', error);
-    return [];
-  }
+  const res = await fetch('/api/broadcasts');
+  if (!res.ok) return [];
+  return await res.json();
 }
 
 export async function fetchTemplates(): Promise<Template[]> {
-  try {
-    const response = await fetch('/api/templates');
-    if (!response.ok) throw new Error('Failed to fetch templates');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching templates:', error);
-    return [];
-  }
+  const res = await fetch('/api/templates');
+  if (!res.ok) return [];
+  return await res.json();
 }
 
 export async function fetchDashboardStats() {
-  try {
-    const response = await fetch('/api/dashboard/stats');
-    if (!response.ok) throw new Error('Failed to fetch dashboard stats');
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    throw error;
-  }
+  const res = await fetch('/api/dashboard/stats');
+  if (!res.ok) throw new Error('Failed to fetch stats');
+  return await res.json();
 }
 
-// ==========================================
-// N8N WEBHOOK FUNCTIONS
-// ==========================================
-
-/**
- * Triggers an n8n webhook to start an automation workflow.
- * @param webhookUrl The full URL of the n8n webhook (e.g., https://n8n.yourdomain.com/webhook/broadcast)
- * @param payload The data to send to n8n
- */
-export async function triggerN8nWorkflow(webhookUrl: string, payload: any): Promise<any> {
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      throw new Error(`n8n webhook failed with status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error triggering n8n workflow:', error);
-    throw error;
-  }
-}
+// (يمكن إضافة دوال أخرى مثل triggerN8nWorkflow إذا احتجتها)

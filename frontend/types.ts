@@ -2,36 +2,35 @@ export type Channel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'telegr
 
 export interface Customer {
   id: string;
-  fullName: string;
-  phone: string;
-  channel: Channel;
-  stage: 'new' | 'qualified' | 'analysis_done' | 'proposal_sent' | 'negotiation' | 'won' | 'lost';
-  intentScore: number;
+  full_name: string;
+  phone_number: string;
+  lead_stage: 'new' | 'qualified' | 'analysis_done' | 'proposal_sent' | 'negotiation' | 'won' | 'lost';
+  buying_intent_score: number;
   language: string;
   country: string;
-  ltvAED: number;
-  createdAt: string;
-}
-
-export interface Message {
-  id: string;
-  conversationId: string;
-  content: string;
-  direction: 'inbound' | 'outbound';
-  isAiGenerated: boolean;
-  timestamp: string;
+  ltv_aed: number;
+  created_at: string;
 }
 
 export interface Conversation {
   id: string;
-  customerId: string;
-  customerName: string;
+  customer_id: string;
+  customer_name: string;
   channel: Channel;
-  aiEnabled: boolean;
-  lastMessage: string;
-  updatedAt: string;
-  unreadCount: number;
+  human_takeover: boolean;   // true = تدخل بشري, false = AI نشط
+  last_message: string;
+  updated_at: string;
   status: 'open' | 'closed' | 'pending_human';
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  customer_id: string;
+  content: string;
+  direction: 'inbound' | 'outbound';
+  is_ai_generated: boolean;
+  created_at: string;
 }
 
 export interface Broadcast {
@@ -55,7 +54,6 @@ export interface Template {
 
 export interface CVAnalysisResult {
   score: number;
-  linkedin_score: number;
   strengths: string[];
   weaknesses: string[];
   sales_pitch: string;
