@@ -30,7 +30,7 @@ export const Pipeline: React.FC = () => {
       // Fallback to mock data if Supabase is not configured or returns empty
       if (data.length === 0) {
         setCustomers(MOCK_CUSTOMERS);
-        setError("Using mock data. Connect Supabase to see real leads.");
+        setError("Using mock data. Connect Cloud SQL to see real leads.");
         setIsConnected(false);
       } else {
         setCustomers(data);
@@ -67,7 +67,7 @@ export const Pipeline: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Sales Pipeline</h1>
           <p className="text-muted-foreground">Track and manage leads across stages.</p>
-          {isConnected && <p className="text-emerald-500 text-sm mt-2">● Connected to Supabase</p>}
+          {isConnected && <p className="text-emerald-500 text-sm mt-2">● Connected to Cloud SQL</p>}
           {error && <p className="text-amber-500 text-sm mt-2">{error}</p>}
         </div>
         <button 
