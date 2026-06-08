@@ -118,30 +118,6 @@ export async function fetchDashboardStats() {
   }
 }
 
-    // Mock chart data for now (in a real app, this would come from daily_analytics table)
-    const chartData = [
-      { date: "Mon", leads: 45, conversions: 12, revenue: 4788 },
-      { date: "Tue", leads: 52, conversions: 15, revenue: 5985 },
-      { date: "Wed", leads: 38, conversions: 10, revenue: 3990 },
-      { date: "Thu", leads: 65, conversions: 22, revenue: 8778 },
-      { date: "Fri", leads: 48, conversions: 14, revenue: 5586 },
-      { date: "Sat", leads: 25, conversions: 5, revenue: 1995 },
-      { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
-    ];
-
-    return {
-      totalLeads: leadsCount || 0,
-      activeChats: activeChats || 0,
-      revenue: revenue || 0,
-      aiResolutionRate: 84.5, // Mocked percentage
-      chartData
-    };
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    throw error;
-  }
-}
-
 // ==========================================
 // N8N WEBHOOK FUNCTIONS
 // ==========================================

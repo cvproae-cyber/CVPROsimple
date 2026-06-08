@@ -53,10 +53,37 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+// مسار مؤقت للتأكد من الجداول المنشأة
+app.get('/api/check-tables', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+    `);
+    res.json({ status: 'success', tables: result.rows.map(r => r.table_name) });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // جلب قائمة العملاء
 app.get('/api/customers', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM customers ORDER BY created_at DESC');
+    // استخدام SQL Aliases لتحويل أسماء الحقول من snake_case إلى camelCase مباشرة
+    const query = `
+      SELECT 
+        id, 
+        full_name AS "fullName", 
+        phone_number AS "phone", 
+        lead_stage AS "stage", 
+        ltv_aed AS "ltvAED", 
+        buying_intent_score AS "intentScore", 
+        language, country, created_at AS "createdAt"
+      FROM customers 
+      ORDER BY created_at DESC`;
+    const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching customers:', error);
@@ -97,6 +124,40 @@ app.get('/api/conversations/:id/messages', async (req, res) => {
   }
 });
 
+// جلب القوالب (Templates)
+app.get('/api/templates', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// جلب الرسائل الجماعية (Broadcasts)
+app.get('/api/broadcasts', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM broadcasts ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// إرسال رسالة جديدة (Outbound)
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { conversationId, customerId, content } = req.body;
+    const result = await pool.query(
+      'INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [conversationId, customerId, content, 'outbound', false]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // إحصائيات لوحة التحكم
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
@@ -121,6 +182,21 @@ app.get('/api/dashboard/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// تفعيل/تعطيل التدخل البشري (Human Takeover)
+app.put('/api/conversations/:id/ai-toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { humanTakeover } = req.body;
+    await pool.query(
+      'UPDATE conversations SET human_takeover = $1, updated_at = NOW() WHERE id = $2',
+      [humanTakeover, id]
+    );
+    res.json({ success: true });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
