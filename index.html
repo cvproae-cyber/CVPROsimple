@@ -7,6 +7,9 @@
         body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
         .card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         h1 { color: #333; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px; }
+        .badge-ai { background: #e3f2fd; color: #1976d2; }
+        .badge-human { background: #fff3e0; color: #e65100; }
         .status { font-weight: bold; color: green; }
     </style>
 </head>
@@ -28,8 +31,13 @@
 
             list.innerHTML = data.map(conv => `
                 <div class="card">
-                    <h3>${conv.full_name} (${conv.phone_number})</h3>
-                    <p>آخر رسالة: ${conv.last_message}</p>
+                    <h3>
+                        ${conv.customerName} (${conv.phoneNumber})
+                        <span class="badge ${conv.isHuman ? 'badge-human' : 'badge-ai'}">
+                            ${conv.isHuman ? 'HUMAN' : 'AI'}
+                        </span>
+                    </h3>
+                    <p>آخر رسالة: ${conv.lastMessage}</p>
                     <p>الحالة: <span class="status">${conv.status}</span></p>
                 </div>
             `).join('');
