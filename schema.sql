@@ -35,16 +35,6 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- إضافة بيانات تجريبية لاختبار الفرونت إند
-INSERT INTO customers (full_name, phone_number, lead_stage, ltv_aed)
-VALUES ('Ahmed Test', '+971500000000', 'new', 500)
-ON CONFLICT (phone_number) DO NOTHING;
-
-INSERT INTO conversations (customer_id, last_message, status) 
-SELECT id, 'Hello, I need help with my CV', 'open' FROM customers 
-WHERE phone_number = '+971500000000'
-ON CONFLICT DO NOTHING;
-
 -- ملاحظة: تم حذف التكرار في التريجرز والرؤى لضمان نظافة الكود
 
 -- وظيفة تحديث التوقيت تلقائياً
