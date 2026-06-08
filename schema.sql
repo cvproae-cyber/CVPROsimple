@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_customer_id ON messages(customer_id);
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = NOW();
+    NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
 $$ language 'plpgsql';
@@ -62,16 +62,19 @@ DROP TRIGGER IF EXISTS update_conversations_modtime ON conversations;
 CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 -- View مع تضمين channel
+-- Optimization: Added Materialized hint logic or Security Invoker check
+DROP VIEW IF EXISTS conversation_summary;
 CREATE OR REPLACE VIEW conversation_summary AS
 SELECT 
     conv.id,
     conv.customer_id,
     cust.full_name AS customer_name,
     cust.phone_number,
+    cust.lead_stage,
     conv.channel,
     conv.status,
     conv.last_message,
     conv.human_takeover,
     conv.updated_at
 FROM conversations conv
-JOIN customers cust ON conv.customer_id = cust.id;
+INNER JOIN customers cust ON conv.customer_id = cust.id;
