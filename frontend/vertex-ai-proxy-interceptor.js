@@ -121,17 +121,11 @@
         console.log('[Vertex AI Proxy Shim] Fetching from local Node.js backend: /api-proxy');
         const proxyResponse = await fetch('/api-proxy', proxyFetchOptions);
 
-        if (proxyResponse.status === 401) {
-            console.error('[Vertex Proxy Shim] Local Node.js backend returned 401. Authentication may be needed.');
-            return proxyResponse; // Return the proxy's 401 response.
+        if (proxyResponse.status === 403) {
+            console.error('[Vertex Proxy Shim] Proxy access forbidden. Check X-App-Proxy secret.');
         }
 
-
-        if (!proxyResponse.ok) {
-          console.error(`[Vertex Proxy Shim] Proxy request to /api-proxy failed with status ${proxyResponse.status}: ${proxyResponse.statusText}`);
-          return proxyResponse; // Propagate other non-ok responses from the proxy.
-        }
-
+        // Return the response as is for the application to handle
         return proxyResponse;
       } catch (error) {
         console.error('[Vertex AI Proxy Shim] Error fetching from local Node.js backend:', error);

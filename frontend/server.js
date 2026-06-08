@@ -1,18 +1,15 @@
 import express from 'express';
-import http from 'http';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
-import axios from 'axios';
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-const server = http.createServer(app);
 const PORT = process.env.PORT || 8080;
 
-// زيادة حجم الطلب المسموح به لاستقبال ملفات الـ CV إذا لزم الأمر
+// Middleware configuration
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
@@ -20,32 +17,63 @@ app.use(express.static(path.join(__dirname, 'dist')));
 app.post('/api-proxy', async (req, res) => {
   const { originalUrl, headers, method, body } = req.body;
   
-  // التأكد من أن الطلب قادم من تطبيقنا عبر الهيدر السري
-  if (req.headers['x-app-proxy'] !== 'ga7BzVOhKQgwlfxUM51ZE_CdKBB2EBlS') {
+  // استخدام متغير بيئة للمفتاح السري لتعزيز الأمان
+  const PROXY_SECRET = process.env.PROXY_SECRET || 'ga7BzVOhKQgwlfxUM51ZE_CdKBB2EBlS';
+  if (req.headers['x-app-proxy'] !== PROXY_SECRET) {
     return res.status(403).send('Forbidden');
   }
 
   try {
-    const response = await axios({
-      url: originalUrl,
+    const response = await fetch(originalUrl, {
       method: method,
       headers: {
         ...headers,
         'Host': 'aiplatform.googleapis.com'
       },
-      data: body,
-      responseType: 'stream'
+      body: method !== 'GET' && method !== 'HEAD' ? JSON.stringify(body) : undefined
     });
 
-    response.data.pipe(res);
+    if (!response.ok) {
+      return res.status(response.status).send(await response.text());
+    }
+
+    // التأكد من وجود محتوى قبل البدء في الـ piping
+    if (!response.body) {
+      return res.status(response.status).end();
+    }
+
+    Readable.fromWeb(response.body).pipe(res);
   } catch (error) {
     console.error('API Proxy Error:', {
       message: error.message,
-      status: error.response?.status,
-      data: error.response?.data
+      url: originalUrl
     });
     
-    res.status(error.response?.status || 500).send(error.response?.data || 'Proxy Error');
+    res.status(500).json({ error: 'Internal Proxy Error', message: error.message });
+  }
+});
+
+// n8n Proxy Endpoint - لربط الفرونت اند بـ n8n بأمان
+app.post('/api/n8n', async (req, res) => {
+  const { workflowId, data } = req.body;
+  const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL; // تأكد من إضافته في ملف .env
+
+  if (!N8N_WEBHOOK_URL) {
+    return res.status(500).json({ error: 'n8n Webhook URL is not configured' });
+  }
+
+  try {
+    const response = await fetch(`${N8N_WEBHOOK_URL}/${workflowId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+    res.status(response.status).json(result);
+  } catch (error) {
+    console.error('n8n Proxy Error:', error);
+    res.status(500).json({ error: 'Failed to trigger n8n workflow' });
   }
 });
 
@@ -67,6 +95,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Frontend server running on port ${PORT}`);
 });

@@ -9,21 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest",
-    "react-router-dom": "latest",
-    "lucide-react": "latest",
-    "recharts": "latest",
-    "@google/genai": "latest",
-    "@supabase/supabase-js": "latest",
     "express": "^4.18.2",
-    "axios": "^1.6.2",
-    "http-proxy-middleware": "^3.0.0"
+    "http-proxy-middleware": "^3.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0",
+    "lucide-react": "^0.344.0",
+    "@supabase/supabase-js": "^2.39.7"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@vitejs/plugin-react": "latest",
-    "typescript": "latest",
-    "vite": "latest"
+    "@types/node": "^20.11.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0"
   }
 }
