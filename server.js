@@ -3,44 +3,29 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-// استيراد الـ pool الموحد والذكي من ملف db.js الذي يدعم التوصيل السحابي عبر الـ Socket تلقائياً
 const pool = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// اختبار الاتصال عند بدء التشغيل بدون إنهاء العملية عند الفشل لمنع انهيار حاوية Cloud Run
+// فحص الاتصال الذكي عند بدء التشغيل دون تدمير الـ Cloud Run Instance
 pool.connect((err, client, release) => {
   if (err) {
     console.error('❌ فشل الاتصال المبدئي بقاعدة البيانات:', err.message);
-    console.warn('⚠️ سيستمر السيرفر في العمل، وسيتم محاولة الاتصال تلقائياً عند طلب البيانات.');
+    console.warn('⚠️ سيستمر السيرفر في العمل، وسيتم إعادة المحاولة تلقائياً عند طلب البيانات.');
   } else {
     console.log('✅ متصل بقاعدة البيانات بنجاح عبر الـ Configuration المحدثة');
     release();
   }
 });
 
-// ============================================
-// نقاط النهاية (Endpoints) وقراءة البيانات الحية
-// ============================================
-
 // ---------- العملاء (Customers) ----------
 app.get('/api/customers', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        id, 
-        full_name, 
-        phone_number, 
-        lead_stage, 
-        buying_intent_score,
-        language, 
-        country, 
-        ltv_aed, 
-        created_at
-      FROM customers
-      ORDER BY created_at DESC
+      SELECT id, full_name, phone_number, lead_stage, buying_intent_score, language, country, ltv_aed, created_at
+      FROM customers ORDER BY created_at DESC
     `);
     res.json(result.rows);
   } catch (err) {
@@ -53,10 +38,7 @@ app.put('/api/customers/:id/stage', async (req, res) => {
   const { id } = req.params;
   const { lead_stage } = req.body;
   try {
-    await pool.query(
-      'UPDATE customers SET lead_stage = $1, updated_at = NOW() WHERE id = $2',
-      [lead_stage, id]
-    );
+    await pool.query('UPDATE customers SET lead_stage = $1, updated_at = NOW() WHERE id = $2', [lead_stage, id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Error updating stage:', err);
@@ -68,17 +50,8 @@ app.put('/api/customers/:id/stage', async (req, res) => {
 app.get('/api/conversations', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        id, 
-        customer_id, 
-        customer_name, 
-        channel, 
-        status,
-        human_takeover, 
-        last_message, 
-        updated_at
-      FROM conversation_summary
-      ORDER BY updated_at DESC
+      SELECT id, customer_id, customer_name, channel, status, human_takeover, last_message, updated_at
+      FROM conversation_summary ORDER BY updated_at DESC
     `);
     res.json(result.rows);
   } catch (err) {
@@ -90,20 +63,10 @@ app.get('/api/conversations', async (req, res) => {
 app.get('/api/conversations/:id/messages', async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      `SELECT 
-        id, 
-        conversation_id, 
-        customer_id, 
-        content, 
-        direction, 
-        is_ai_generated, 
-        created_at
-      FROM messages
-      WHERE conversation_id = $1
-      ORDER BY created_at ASC`,
-      [id]
-    );
+    const result = await pool.query(`
+      SELECT id, conversation_id, customer_id, content, direction, is_ai_generated, created_at
+      FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC
+    `, [id]);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching messages:', err);
@@ -114,13 +77,10 @@ app.get('/api/conversations/:id/messages', async (req, res) => {
 app.post('/api/messages', async (req, res) => {
   const { conversation_id, customer_id, content } = req.body;
   try {
-    const result = await pool.query(
-      `INSERT INTO messages 
-        (conversation_id, customer_id, content, direction, is_ai_generated)
-       VALUES ($1, $2, $3, 'outbound', false)
-       RETURNING *`,
-      [conversation_id, customer_id, content]
-    );
+    const result = await pool.query(`
+      INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated)
+      VALUES ($1, $2, $3, 'outbound', false) RETURNING *
+    `, [conversation_id, customer_id, content]);
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error inserting message:', err);
@@ -132,10 +92,7 @@ app.put('/api/conversations/:id/takeover', async (req, res) => {
   const { id } = req.params;
   const { human_takeover } = req.body;
   try {
-    await pool.query(
-      'UPDATE conversations SET human_takeover = $1, updated_at = NOW() WHERE id = $2',
-      [human_takeover, id]
-    );
+    await pool.query('UPDATE conversations SET human_takeover = $1, updated_at = NOW() WHERE id = $2', [human_takeover, id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Error toggling takeover:', err);
@@ -165,52 +122,31 @@ app.get('/api/dashboard/stats', async (req, res) => {
     const rawRevenue = revenueRes.rows[0] ? (revenueRes.rows[0].coalesce || revenueRes.rows[0].sum || 0) : 0;
     const revenue = parseFloat(rawRevenue);
 
-    res.json({
-      totalLeads,
-      activeChats,
-      revenue,
-      aiResolutionRate: 84.5,
-      chartData
-    });
+    res.json({ totalLeads, activeChats, revenue, aiResolutionRate: 84.5, chartData });
   } catch (err) {
     console.error('Error fetching dashboard stats:', err);
     res.status(500).json({ error: 'فشل جلب إحصائيات لوحة التحكم' });
   }
 });
 
-// ---------- نقاط نهاية احتياطية ----------
+// ---------- مسارات احتياطية ----------
 app.get('/api/templates', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (err) {
-    res.json([]);
-  }
+  try { const result = await pool.query('SELECT * FROM templates ORDER BY created_at DESC'); res.json(result.rows); } 
+  catch (err) { res.json([]); }
 });
 
 app.get('/api/broadcasts', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM broadcasts ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (err) {
-    res.json([]);
-  }
+  try { const result = await pool.query('SELECT * FROM broadcasts ORDER BY created_at DESC'); res.json(result.rows); } 
+  catch (err) { res.json([]); }
 });
 
-// ============================================
-// خدمة ملفات الـ Frontend وربط مسارات الـ SPA
-// ============================================
-
-// خدمة ملفات الـ dist المستخرجة بعد البناء بنجاح
+// ---------- خدمة الـ Frontend (SPA Settings) ----------
 app.use(express.static(path.join(__dirname, 'dist')));
-
-// حماية الـ React Router من خطأ Cannot GET عند الـ Refresh للمسارات الداخلية
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// ---------- تشغيل الخادم ----------
-const PORT = process.env.PORT || 8080; 
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر الموحد يعمل بنجاح وكفاءة على بورت ${PORT}`);
 });
