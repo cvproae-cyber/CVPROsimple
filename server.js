@@ -27,14 +27,34 @@ pool.connect((err, client, release) => {
 
 // Serve static frontend files (built React app)
 const distPath = path.join(__dirname, 'dist');
-if (!require('fs').existsSync(distPath)) {
+const fs = require('fs');
+if (!fs.existsSync(distPath)) {
   console.warn('⚠️ dist/ folder not found. Run `npm run build` in frontend directory first.');
+  console.warn('⚠️ Falling back to frontend/ (development mode)');
+  // Optionally, for development you could serve from frontend/ directly
+  // app.use(express.static(path.join(__dirname, 'frontend')));
+} else {
+  app.use(express.static(distPath));
 }
-app.use(express.static(distPath));
 
 // Catch‑all: serve index.html for client‑side routing (React Router)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+// Using app.use instead of app.get to avoid path-to-regexp issues in Express 5
+// This middleware will run for any GET request that didn't match a static file
+app.use((req, res, next) => {
+  // Only handle GET requests and when dist exists
+  if (req.method === 'GET' && fs.existsSync(distPath)) {
+    // Check if the request is for a file that exists (like .js, .css)
+    // If not, send index.html for SPA routing
+    const requestedFile = path.join(distPath, req.path);
+    if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
+      // Let express.static handle it, but since we're after static middleware,
+      // we need to serve the file manually or let it pass
+      return next();
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
+  } else {
+    next();
+  }
 });
 
 const PORT = process.env.PORT || 8080;
