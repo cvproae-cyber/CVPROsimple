@@ -1,9 +1,8 @@
 import { Customer, Conversation, Message, Broadcast, Template } from '../types';
 
-// PRODUCTION URL: Replace with your actual n8n instance URL
-// Ensure it ends with /webhook so that paths like /api/customers work correctly.
-const N8N_INSTANCE_URL = 'https://n8n.yourdomain.com'; 
-const API_BASE = `${N8N_INSTANCE_URL}/webhook`;
+// Using environment variable for production flexibility
+const N8N_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-1046523361460.me-west1.run.app';
+const API_BASE = `${N8N_URL}/webhook`;
 
 // ----------------------------------------------
 // 1. العملاء
@@ -47,15 +46,13 @@ export async function toggleHumanTakeover(conversation_id: string, human_takeove
 // ----------------------------------------------
 export async function insertOutboundMessage(
   conversation_id: string,
-  customer_id: string,
   content: string
 ): Promise<void> {
-  // Aligned with n8n "Extract Message Params" node
-  
+  // Aligned with corrected n8n node (only conversationId and content)
   const res = await fetch(`${API_BASE}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversationId: conversation_id, customerId: customer_id, content }),
+    body: JSON.stringify({ conversationId: conversation_id, content }),
   });
   if (!res.ok) throw new Error('Failed to send message');
 }
@@ -77,29 +74,19 @@ export async function triggerN8nWorkflow(webhookUrl: string, data: any): Promise
 // 5. مؤقتاً: البث والقوالب والإحصائيات
 // ----------------------------------------------
 export async function fetchBroadcasts(): Promise<Broadcast[]> {
-  // مؤقتاً نعيد مصفوفة فارغة
-  return [];
+  const res = await fetch(`${API_BASE}/broadcasts`);
+  if (!res.ok) return []; // Fallback to empty
+  return res.json();
 }
 
 export async function fetchTemplates(): Promise<Template[]> {
-  return [];
+  const res = await fetch(`${API_BASE}/templates`);
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function fetchDashboardStats() {
-  // مؤقتاً نعيد إحصائيات وهمية
-  return {
-    totalLeads: 12484,
-    activeChats: 142,
-    revenue: 34314,
-    aiResolutionRate: 84.5,
-    chartData: [
-      { date: "Mon", leads: 45, conversions: 12, revenue: 4788 },
-      { date: "Tue", leads: 52, conversions: 15, revenue: 5985 },
-      { date: "Wed", leads: 38, conversions: 10, revenue: 3990 },
-      { date: "Thu", leads: 65, conversions: 22, revenue: 8778 },
-      { date: "Fri", leads: 48, conversions: 14, revenue: 5586 },
-      { date: "Sat", leads: 25, conversions: 5, revenue: 1995 },
-      { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
-    ]
-  };
+  const res = await fetch(`${API_BASE}/dashboard/stats`);
+  if (!res.ok) throw new Error('Failed to fetch stats');
+  return res.json();
 }
