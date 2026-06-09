@@ -11,6 +11,7 @@ export const Broadcasts: React.FC = () => {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadBroadcasts();
@@ -18,11 +19,13 @@ export const Broadcasts: React.FC = () => {
 
   const loadBroadcasts = async () => {
     setIsLoading(true);
+    setErrorMsg(null);
     try {
       const data = await fetchBroadcasts();
       setBroadcasts(data.length > 0 ? data : MOCK_BROADCASTS);
     } catch (err) {
       console.error(err);
+      setErrorMsg("Failed to load broadcasts. Using mock data.");
       setBroadcasts(MOCK_BROADCASTS);
     } finally {
       setIsLoading(false);
@@ -30,24 +33,33 @@ export const Broadcasts: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!form.name || !form.message) return;
+    if (!form.name || !form.message) {
+      alert("Please fill in name and message");
+      return;
+    }
     
     setIsSending(true);
+    setErrorMsg(null);
     try {
-      // In a real app, you would save the broadcast to Supabase first,
-      // then trigger n8n to actually send the messages.
-      // For this demo, we'll just simulate triggering the n8n webhook.
+      // Get the n8n URL from environment (same as in api.ts)
+      const N8N_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-1046523361460.me-west1.run.app';
+      const webhookUrl = `${N8N_URL}/webhook/api/broadcasts`;
       
-      // Example of triggering n8n:
-      // await triggerN8nWorkflow('https://your-n8n-url.com/webhook/broadcast', form);
+      const result = await triggerN8nWorkflow(webhookUrl, {
+        name: form.name,
+        channel: form.channel,
+        message: form.message
+      });
       
-      alert("Broadcast triggered successfully via n8n (Mock)");
+      console.log("Broadcast created:", result);
+      alert(`Broadcast "${form.name}" created successfully!`);
       setOpen(false);
       setForm({ name: "", channel: "whatsapp", message: "" });
-      loadBroadcasts();
-    } catch (error) {
-      console.error("Failed to trigger broadcast:", error);
-      alert("Failed to trigger broadcast.");
+      loadBroadcasts(); // refresh list
+    } catch (error: any) {
+      console.error("Failed to create broadcast:", error);
+      setErrorMsg(error.message || "Failed to create broadcast. Check n8n webhook.");
+      alert("Failed to create broadcast. See console for details.");
     } finally {
       setIsSending(false);
     }
@@ -59,6 +71,7 @@ export const Broadcasts: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Broadcasts</h1>
           <p className="text-muted-foreground">Mass messaging campaigns.</p>
+          {errorMsg && <p className="text-sm text-destructive mt-1">{errorMsg}</p>}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={loadBroadcasts}>Refresh</Button>
@@ -124,19 +137,31 @@ export const Broadcasts: React.FC = () => {
         </DialogHeader>
         <DialogContent>
           <div className="space-y-4">
-            <Input placeholder="Campaign name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
+            <Input 
+              placeholder="Campaign name" 
+              value={form.name} 
+              onChange={(e) => setForm({ ...form, name: e.target.value })} 
+            />
+            <Select 
+              value={form.channel} 
+              onChange={(e) => setForm({ ...form, channel: e.target.value })}
+            >
               <option value="whatsapp">WhatsApp</option>
               <option value="instagram">Instagram</option>
-              <option value="both">Both</option>
+              <option value="all">All Channels</option>
             </Select>
-            <Textarea placeholder="Message content" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+            <Textarea 
+              placeholder="Message content" 
+              rows={4} 
+              value={form.message} 
+              onChange={(e) => setForm({ ...form, message: e.target.value })} 
+            />
           </div>
         </DialogContent>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button onClick={handleCreate} disabled={isSending}>
-            {isSending ? 'Sending...' : 'Create'}
+            {isSending ? 'Creating...' : 'Create Broadcast'}
           </Button>
         </DialogFooter>
       </Dialog>

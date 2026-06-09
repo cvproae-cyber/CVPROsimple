@@ -1,101 +1,126 @@
--- Ensure UUID extension is available
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- =============================================
+-- CVPRO AI CRM - Complete Database Schema
+-- PostgreSQL 14+
+-- =============================================
 
--- جدول العملاء
+-- Customers table (leads)
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name TEXT NOT NULL,
-    phone_number TEXT UNIQUE,
-    lead_stage TEXT DEFAULT 'new',
-    ltv_aed DECIMAL DEFAULT 0,
+    phone_number TEXT NOT NULL UNIQUE,
+    lead_stage TEXT NOT NULL DEFAULT 'new' CHECK (lead_stage IN ('new', 'qualified', 'analysis_done', 'proposal_sent', 'negotiation', 'won', 'lost')),
+    buying_intent_score INTEGER DEFAULT 0 CHECK (buying_intent_score BETWEEN 0 AND 100),
     language TEXT DEFAULT 'ar',
     country TEXT DEFAULT 'AE',
-    buying_intent_score INTEGER DEFAULT 0,
+    ltv_aed NUMERIC(10,2) DEFAULT 0,
+    opted_in BOOLEAN DEFAULT TRUE,  -- for broadcast consent
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول المحادثات
+-- Conversations table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id UUID REFERENCES customers(id),
-    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'closed', 'pending', 'archived')),
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    channel TEXT NOT NULL CHECK (channel IN ('whatsapp', 'instagram', 'facebook', 'tiktok', 'telegram', 'email')),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'pending_human')),
     human_takeover BOOLEAN DEFAULT FALSE,
-    channel TEXT DEFAULT 'whatsapp',
     last_message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Index for faster joins between customers and conversations
-CREATE INDEX IF NOT EXISTS idx_conversations_customer_id ON conversations(customer_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
-
--- جدول الرسائل
+-- Messages table
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id UUID REFERENCES conversations(id),
-    customer_id UUID REFERENCES customers(id),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id),
     content TEXT NOT NULL,
-    direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+    direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
     is_ai_generated BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Indexes for faster message retrieval
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_messages_customer_id ON messages(customer_id);
-
--- وظيفة تحديث التوقيت تلقائياً
-CREATE OR REPLACE FUNCTION update_modified_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- ربط التريجر بالجداول
-DROP TRIGGER IF EXISTS update_customers_modtime ON customers;
-CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
-
-DROP TRIGGER IF EXISTS update_conversations_modtime ON conversations;
-CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
-
--- جدول القوالب
+-- Templates table (for message templates)
 CREATE TABLE IF NOT EXISTS templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
+    language TEXT DEFAULT 'ar',
+    category TEXT NOT NULL,
     content TEXT NOT NULL,
-    category TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول البث
+-- Broadcasts table
 CREATE TABLE IF NOT EXISTS broadcasts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    channel TEXT DEFAULT 'whatsapp',
-    message TEXT NOT NULL,
-    status TEXT DEFAULT 'pending',
-    sent_count INTEGER DEFAULT 0,
+    channel TEXT NOT NULL CHECK (channel IN ('whatsapp', 'instagram', 'facebook', 'all')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'sending', 'completed', 'failed')),
+    sentCount INTEGER DEFAULT 0,
+    deliveredCount INTEGER DEFAULT 0,
+    readCount INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- View مع تضمين channel
--- Optimization: Added Materialized hint logic or Security Invoker check
-DROP VIEW IF EXISTS conversation_summary;
+-- Chat memory table for n8n LangChain (auto-created by n8n, but included here for clarity)
+CREATE TABLE IF NOT EXISTS n8n_chat_histories (
+    id SERIAL PRIMARY KEY,
+    session_key TEXT NOT NULL,
+    context TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =============================================
+-- Views
+-- =============================================
+
 CREATE OR REPLACE VIEW conversation_summary AS
 SELECT 
-    conv.id,
-    conv.customer_id,
+    c.id,
+    c.customer_id,
     cust.full_name AS customer_name,
-    cust.phone_number,
-    cust.lead_stage,
-    conv.channel,
-    conv.status,
-    conv.last_message,
-    conv.human_takeover,
-    conv.updated_at
-FROM conversations conv
-INNER JOIN customers cust ON conv.customer_id = cust.id;
+    c.channel,
+    c.status,
+    c.human_takeover,
+    c.last_message,
+    c.updated_at
+FROM conversations c
+JOIN customers cust ON cust.id = c.customer_id;
+
+-- =============================================
+-- Indexes for performance
+-- =============================================
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone_number ON customers(phone_number);
+CREATE INDEX IF NOT EXISTS idx_customers_lead_stage ON customers(lead_stage);
+CREATE INDEX IF NOT EXISTS idx_customers_created_at ON customers(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_customer_id ON conversations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_status ON broadcasts(status);
+CREATE INDEX IF NOT EXISTS idx_n8n_chat_histories_session ON n8n_chat_histories(session_key);
+
+-- =============================================
+-- Sample data (optional – for development)
+-- =============================================
+
+INSERT INTO customers (id, full_name, phone_number, lead_stage, buying_intent_score, language, country, ltv_aed)
+VALUES 
+    ('11111111-1111-1111-1111-111111111111', 'أحمد المنصوري', '+971501234567', 'qualified', 85, 'ar', 'AE', 0),
+    ('22222222-2222-2222-2222-222222222222', 'Fatima Al Shehhi', '+971502345678', 'new', 60, 'en', 'AE', 0)
+ON CONFLICT (phone_number) DO NOTHING;
+
+INSERT INTO conversations (id, customer_id, channel, status, human_takeover, last_message)
+VALUES 
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'whatsapp', 'open', false, 'مرحباً، أحتاج مساعدة في سيرتي الذاتية'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'whatsapp', 'open', true, 'هل يمكنكم مساعدتي؟')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO templates (id, name, language, category, content)
+VALUES 
+    ('tpl-001', 'welcome_ar', 'ar', 'greeting', 'مرحباً {{customer_name}}! 👋\nأنا المساعد الذكي لـ CVPro. كيف يمكنني مساعدتك اليوم؟'),
+    ('tpl-002', 'cv_analysis_complete', 'en', 'update', 'Dear {{customer_name}},\n\nWe have completed the analysis of your CV. Your ATS score is {{score}}%.')
+ON CONFLICT (id) DO NOTHING;

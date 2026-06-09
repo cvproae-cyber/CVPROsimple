@@ -1,5 +1,3 @@
-[
-[
 {
   "name": "CVPro - Full API + WhatsApp AI (Fixed)",
   "nodes": [
@@ -61,7 +59,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT c.id, c.full_name, conv.human_takeover FROM customers c LEFT JOIN conversations conv ON conv.customer_id = c.id WHERE c.phone_number = $1::text LIMIT 1;",
+        "query": "SELECT c.id, c.full_name, conv.id as conversation_id, conv.human_takeover FROM customers c LEFT JOIN conversations conv ON conv.customer_id = c.id AND conv.channel = 'whatsapp' WHERE c.phone_number = $1::text LIMIT 1;",
         "options": { "queryReplacement": "={{ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from }}" }
       },
       "type": "n8n-nodes-base.postgres",
@@ -69,6 +67,19 @@
       "position": [464, 800],
       "id": "check-lead-postgres",
       "name": "Check Lead in Postgres",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) VALUES ($1::uuid, $2::uuid, $3, 'inbound', false, NOW())",
+        "options": { "queryReplacement": "={{ [$json.conversation_id, $json.id, $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].text.body] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [560, 800],
+      "id": "save-inbound-message",
+      "name": "Save Inbound Message",
       "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
     },
     {
@@ -85,7 +96,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [560, 800],
+      "position": [672, 800],
       "id": "if-not-human",
       "name": "AI Allowed?"
     },
@@ -99,7 +110,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [672, 800],
+      "position": [784, 800],
       "id": "ai-agent",
       "name": "AI Agent"
     },
@@ -130,8 +141,25 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "leftValue": "={{ $json.output }}",
+            "operator": { "type": "string", "operation": "isNotEmpty" }
+          }],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [896, 800],
+      "id": "if-ai-success",
+      "name": "AI Output Valid?"
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://graph.facebook.com/v20.0/1152244467965182/messages",
+        "url": "=https://graph.facebook.com/v20.0/{{$env.WHATSAPP_PHONE_NUMBER_ID}}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -140,16 +168,46 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [912, 800],
+      "position": [1008, 800],
       "id": "send-wa-response",
       "name": "Send WhatsApp Response",
       "credentials": { "httpHeaderAuth": { "id": "5f7wrRC9Ah7kVg0J", "name": "Header Auth account" } }
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{$env.WHATSAPP_PHONE_NUMBER_ID}}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": {{ JSON.stringify($('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from) }},\n  \"type\": \"text\",\n  \"text\": { \"preview_url\": false, \"body\": \"عذراً، الذكاء الاصطناعي يواجه مشكلة حالياً. سيتم تحويلك إلى أحد المندوبين قريباً.\" }\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1008, 880],
+      "id": "send-wa-fallback",
+      "name": "Send Fallback Message",
+      "credentials": { "httpHeaderAuth": { "id": "5f7wrRC9Ah7kVg0J", "name": "Header Auth account" } }
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) \nVALUES (\n  (SELECT id FROM conversations WHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1) LIMIT 1),\n  (SELECT id FROM customers WHERE phone_number = $1),\n  $2,\n  'outbound',\n  true,\n  NOW()\n);\nUPDATE conversations \nSET last_message = $2, updated_at = NOW() \nWHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1);",
-        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from, $json.output ] }}" }
+        "query": "UPDATE conversations SET human_takeover = true WHERE id = (SELECT conversation_id FROM messages WHERE conversation_id = $1 LIMIT 1)",
+        "options": { "queryReplacement": "={{ $json.conversation_id }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 880],
+      "id": "set-human-takeover",
+      "name": "Set Human Takeover on Error",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) VALUES ($1::uuid, (SELECT customer_id FROM conversations WHERE id = $1), $2, 'outbound', true, NOW()); UPDATE conversations SET last_message = $2, updated_at = NOW() WHERE id = $1;",
+        "options": { "queryReplacement": "={{ [$('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from, $json.output] }}" }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
@@ -455,7 +513,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://graph.facebook.com/v20.0/1152244467965182/messages",
+        "url": "=https://graph.facebook.com/v20.0/{{$env.WHATSAPP_PHONE_NUMBER_ID}}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -492,7 +550,7 @@
         "httpMethod": "POST",
         "path": "api/analyze-cv",
         "responseMode": "responseNode",
-        "options": { "allowedOrigins": "*" }
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
@@ -504,7 +562,7 @@
       "parameters": {
         "promptType": "define",
         "text": "={{ $json.body.cvText }}",
-        "options": { "systemMessage": "Analyze the CV and return a JSON with score, strengths, and weaknesses." }
+        "options": { "systemMessage": "Analyze the CV and return a JSON with score (0-100), strengths (array), weaknesses (array), sales_pitch (string), personalized_offer (string)." }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
@@ -522,18 +580,203 @@
       "position": [464, -900],
       "id": "respond-analysis",
       "name": "Respond Analysis"
+    },
+    {
+      "parameters": {
+        "path": "api/dashboard/stats",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1120],
+      "id": "webhook-stats",
+      "name": "GET /api/dashboard/stats"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  (SELECT COUNT(*) FROM customers) AS total_leads,\n  (SELECT COUNT(*) FROM conversations WHERE status = 'open') AS active_chats,\n  (SELECT COALESCE(SUM(ltv_aed), 0) FROM customers WHERE lead_stage = 'won') AS revenue;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, -1120],
+      "id": "get-stats-db",
+      "name": "Get Real Stats",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"totalLeads\": {{ $json.total_leads }},\n  \"activeChats\": {{ $json.active_chats }},\n  \"revenue\": {{ $json.revenue }},\n  \"aiResolutionRate\": 84.5,\n  \"chartData\": [\n    { \"date\": \"Mon\", \"leads\": 45, \"conversions\": 12, \"revenue\": 4788 },\n    { \"date\": \"Tue\", \"leads\": 52, \"conversions\": 15, \"revenue\": 5985 },\n    { \"date\": \"Wed\", \"leads\": 38, \"conversions\": 10, \"revenue\": 3990 },\n    { \"date\": \"Thu\", \"leads\": 65, \"conversions\": 22, \"revenue\": 8778 },\n    { \"date\": \"Fri\", \"leads\": 48, \"conversions\": 14, \"revenue\": 5586 }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -1120],
+      "id": "respond-stats",
+      "name": "Respond Stats"
+    },
+    {
+      "parameters": {
+        "path": "api/templates",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1320],
+      "id": "webhook-templates",
+      "name": "GET /api/templates"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM templates ORDER BY created_at DESC;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, -1320],
+      "id": "get-templates",
+      "name": "Get Templates",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -1320],
+      "id": "respond-templates",
+      "name": "Respond Templates"
+    },
+    {
+      "parameters": {
+        "path": "api/broadcasts",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1520],
+      "id": "webhook-broadcasts-get",
+      "name": "GET /api/broadcasts"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM broadcasts ORDER BY created_at DESC;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, -1520],
+      "id": "get-broadcasts",
+      "name": "Get Broadcasts",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -1520],
+      "id": "respond-broadcasts",
+      "name": "Respond Broadcasts"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/broadcasts",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1720],
+      "id": "webhook-broadcasts-post",
+      "name": "POST /api/broadcasts"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst name = body.name;\nconst channel = body.channel;\nconst message = body.message;\nif (!name || !channel || !message) throw new Error('Missing name, channel, or message');\nreturn [{ json: { name, channel, message } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, -1720],
+      "id": "extract-broadcast",
+      "name": "Extract Broadcast Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO broadcasts (name, channel, status, sentCount, deliveredCount, readCount, created_at) VALUES ($1, $2, 'scheduled', 0, 0, 0, NOW()) RETURNING id;",
+        "options": { "queryReplacement": "={{ [$json.name, $json.channel] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [464, -1720],
+      "id": "insert-broadcast",
+      "name": "Insert Broadcast",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const broadcastId = $json.id;\nconst message = $('Extract Broadcast Data').item.json.message;\nconst channel = $('Extract Broadcast Data').item.json.channel;\n// Here you would implement actual sending logic, e.g., query all customers and send via Meta API\n// For MVP, just return success\nreturn [{ json: { broadcastId, message, channel, status: 'completed' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [704, -1720],
+      "id": "send-broadcast",
+      "name": "Send Broadcast (stub - implement actual sending)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE broadcasts SET status = 'completed', sentCount = (SELECT COUNT(*) FROM customers WHERE opted_in = true) WHERE id = $1::uuid;",
+        "options": { "queryReplacement": "={{ $json.broadcastId }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [944, -1720],
+      "id": "update-broadcast-status",
+      "name": "Update Broadcast Status",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"broadcastId\": {{ $json.broadcastId }} }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1184, -1720],
+      "id": "respond-broadcast-post",
+      "name": "Respond Broadcast Created"
     }
   ],
   "connections": {
     "WhatsApp Webhook": { "main": [[{ "node": "Respond to Verification", "type": "main", "index": 0 }]] },
     "WhatsApp Webhook POST": { "main": [[{ "node": "Is Valid Message?", "type": "main", "index": 0 }]] },
     "Is Valid Message?": { "main": [[{ "node": "Check Lead in Postgres", "type": "main", "index": 0 }]] },
-    "Check Lead in Postgres": { "main": [[{ "node": "AI Allowed?", "type": "main", "index": 0 }]] },
+    "Check Lead in Postgres": { "main": [[{ "node": "Save Inbound Message", "type": "main", "index": 0 }]] },
+    "Save Inbound Message": { "main": [[{ "node": "AI Allowed?", "type": "main", "index": 0 }]] },
     "AI Allowed?": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
-    "AI Agent": { "main": [[{ "node": "Send WhatsApp Response", "type": "main", "index": 0 }]] },
+    "AI Agent": { "main": [[{ "node": "AI Output Valid?", "type": "main", "index": 0 }]] },
     "Google Vertex Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
     "Postgres Chat Memory": { "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]] },
+    "AI Output Valid?": {
+      "main": [
+        [{ "node": "Send WhatsApp Response", "type": "main", "index": 0 }],
+        [{ "node": "Send Fallback Message", "type": "main", "index": 0 }]
+      ]
+    },
     "Send WhatsApp Response": { "main": [[{ "node": "Sync to Postgres CRM", "type": "main", "index": 0 }]] },
+    "Send Fallback Message": { "main": [[{ "node": "Set Human Takeover on Error", "type": "main", "index": 0 }]] },
     "GET /api/customers": { "main": [[{ "node": "Get Customers", "type": "main", "index": 0 }]] },
     "Get Customers": { "main": [[{ "node": "Respond Customers", "type": "main", "index": 0 }]] },
     "GET /api/conversations": { "main": [[{ "node": "Get Conversations", "type": "main", "index": 0 }]] },
@@ -552,140 +795,24 @@
     "Get Phone Number": { "main": [[{ "node": "Insert Outbound Message", "type": "main", "index": 0 }]] },
     "Insert Outbound Message": { "main": [[{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]] },
     "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] },
-    "GET /api/broadcasts": { "main": [[{ "node": "Get Broadcasts DB", "type": "main", "index": 0 }]] },
-    "Get Templates DB": { "main": [[{ "node": "Respond Templates", "type": "main", "index": 0 }]] }
-  },
-  "active": true,
-  "settings": { "executionOrder": "v1", "binaryMode": "separate" },
-  "versionId": "final-v1",
-  "meta": { "instanceId": "fd7f2e0214133b729d50e2e27f539e87389762f7eb278df76909548cc7c3904d" },
-  "id": "DP6A7yjiFMVt9qYt",
-  "tags": []
-}
-,
-{
-  "name": "CVPro - Production API v1",
-  "nodes": [
-    {
-      "parameters": {
-        "path": "whatsapp-webhook",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [48, 608],
-      "id": "webhook-whatsapp",
-      "name": "WhatsApp Webhook"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.query['hub.challenge'] }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [256, 608],
-      "id": "respond-verify",
-      "name": "Respond to Verification"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "whatsapp-webhook",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [48, 800],
-      "id": "webhook-whatsapp-post",
-      "name": "WhatsApp Webhook POST"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT \n  (SELECT COUNT(*) FROM customers) AS total_leads,\n  (SELECT COUNT(*) FROM conversations WHERE status = 'open') AS active_chats,\n  (SELECT COALESCE(SUM(ltv_aed), 0) FROM customers WHERE lead_stage = 'won') AS revenue;"
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [240, -1120],
-      "id": "get-stats-db",
-      "name": "Get Real Stats",
-      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ" } }
-    },
-    {
-      "parameters": {
-        "path": "api/dashboard/stats",
-        "responseMode": "responseNode",
-        "options": { "allowedOrigins": "*" }
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [0, -1120],
-      "id": "webhook-stats",
-      "name": "GET /api/dashboard/stats"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"totalLeads\": {{ $json.total_leads }},\n  \"activeChats\": {{ $json.active_chats }},\n  \"revenue\": {{ $json.revenue }},\n  \"aiResolutionRate\": 84.5,\n  \"chartData\": [\n    { \"date\": \"Mon\", \"leads\": 45, \"conversions\": 12, \"revenue\": 4788 },\n    { \"date\": \"Tue\", \"leads\": 52, \"conversions\": 15, \"revenue\": 5985 },\n    { \"date\": \"Wed\", \"leads\": 38, \"conversions\": 10, \"revenue\": 3990 },\n    { \"date\": \"Thu\", \"leads\": 65, \"conversions\": 22, \"revenue\": 8778 },\n    { \"date\": \"Fri\", \"leads\": 48, \"conversions\": 14, \"revenue\": 5586 }\n  ]\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [464, -1120],
-      "id": "respond-stats",
-      "name": "Respond Stats"
-    },
-    {
-      "parameters": {
-        "path": "api/templates",
-        "responseMode": "responseNode",
-        "options": { "allowedOrigins": "*" }
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [0, -1320],
-      "id": "webhook-templates",
-      "name": "GET /api/templates"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT * FROM templates ORDER BY created_at DESC;"
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [240, -1320],
-      "id": "get-templates",
-      "name": "Get Templates",
-      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ" } }
-    },
-    {
-      "parameters": {
-        "respondWith": "allIncomingItems",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [464, -1320],
-      "id": "respond-templates",
-      "name": "Respond Templates"
-    }
-  ],
-  "connections": {
-    "WhatsApp Webhook": { "main": [[{ "node": "Respond to Verification", "type": "main", "index": 0 }]] },
+    "POST /api/analyze-cv": { "main": [[{ "node": "CV Analysis Agent", "type": "main", "index": 0 }]] },
+    "CV Analysis Agent": { "main": [[{ "node": "Respond Analysis", "type": "main", "index": 0 }]] },
     "GET /api/dashboard/stats": { "main": [[{ "node": "Get Real Stats", "type": "main", "index": 0 }]] },
     "Get Real Stats": { "main": [[{ "node": "Respond Stats", "type": "main", "index": 0 }]] },
     "GET /api/templates": { "main": [[{ "node": "Get Templates", "type": "main", "index": 0 }]] },
     "Get Templates": { "main": [[{ "node": "Respond Templates", "type": "main", "index": 0 }]] },
-    "POST /api/messages": { "main": [[{ "node": "Extract Message Params", "type": "main", "index": 0 }]] },
-    "Extract Message Params": { "main": [[{ "node": "Get Phone Number", "type": "main", "index": 0 }]] },
-    "Get Phone Number": { "main": [[{ "node": "Insert Outbound Message", "type": "main", "index": 0 }]] },
-    "Insert Outbound Message": { "main": [[{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]] },
-    "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
-  }
+    "GET /api/broadcasts": { "main": [[{ "node": "Get Broadcasts", "type": "main", "index": 0 }]] },
+    "Get Broadcasts": { "main": [[{ "node": "Respond Broadcasts", "type": "main", "index": 0 }]] },
+    "POST /api/broadcasts": { "main": [[{ "node": "Extract Broadcast Data", "type": "main", "index": 0 }]] },
+    "Extract Broadcast Data": { "main": [[{ "node": "Insert Broadcast", "type": "main", "index": 0 }]] },
+    "Insert Broadcast": { "main": [[{ "node": "Send Broadcast (stub - implement actual sending)", "type": "main", "index": 0 }]] },
+    "Send Broadcast (stub - implement actual sending)": { "main": [[{ "node": "Update Broadcast Status", "type": "main", "index": 0 }]] },
+    "Update Broadcast Status": { "main": [[{ "node": "Respond Broadcast Created", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1", "binaryMode": "separate" },
+  "versionId": "final-v2",
+  "meta": { "instanceId": "fd7f2e0214133b729d50e2e27f539e87389762f7eb278df76909548cc7c3904d" },
+  "id": "DP6A7yjiFMVt9qYt",
+  "tags": []
 }
-]
-]

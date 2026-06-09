@@ -31,10 +31,6 @@ export const Inbox: React.FC = () => {
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
-  useEffect(() => { loadConversations(); }, []);
-  useEffect(() => { if (selectedId) loadMessages(selectedId); else setMessages([]); }, [selectedId]);
-  useEffect(() => { scrollToBottom(); }, [messages]);
-
   const loadConversations = async () => {
     setIsLoading(true);
     try {
@@ -58,12 +54,29 @@ export const Inbox: React.FC = () => {
     }
   };
 
+  // Load conversations once on mount
+  useEffect(() => { loadConversations(); }, []);
+
+  // Load messages when a conversation is selected AND set up polling for real-time updates
+  useEffect(() => {
+    if (!selectedId) {
+      setMessages([]);
+      return;
+    }
+    loadMessages(selectedId);
+    const pollInterval = setInterval(() => loadMessages(selectedId), 5000);
+    return () => clearInterval(pollInterval);
+  }, [selectedId]);
+
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
   const handleSendMessage = useCallback(async () => {
     if (!inputText.trim() || !selectedId || !selectedConv) return;
     const textToSend = inputText;
     setInputText('');
     setIsSending(true);
     try {
+      // FIXED: removed the extra customer_id argument – now only conversation_id and content
       await insertOutboundMessage(selectedId, textToSend);
       const newUserMsg: Message = {
         id: Date.now().toString(),

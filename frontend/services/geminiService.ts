@@ -1,8 +1,7 @@
 import { CVAnalysisResult } from '../types';
 import { triggerN8nWorkflow } from './api';
 
-// In production, this would be your n8n webhook URL
-// e.g., https://n8n.yourdomain.com/webhook/analyze-cv
+// Use the same n8n base URL as in api.ts
 const N8N_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-1046523361460.me-west1.run.app';
 const N8N_ANALYZE_WEBHOOK = `${N8N_URL}/webhook/api/analyze-cv`;
 
@@ -10,7 +9,7 @@ export async function analyzeCVText(cvText: string): Promise<CVAnalysisResult> {
   if (!cvText.trim()) throw new Error("CV text is empty");
   
   try {
-    // We delegate the work to n8n, which uses Vertex AI with the JSON Service Account
+    // Delegate the work to n8n, which uses Vertex AI with the JSON Service Account
     return await triggerN8nWorkflow(N8N_ANALYZE_WEBHOOK, { cvText });
   } catch (error) {
     console.error("Error analyzing CV:", error);
