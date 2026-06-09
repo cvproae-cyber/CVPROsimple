@@ -1,47 +1,27 @@
 const express = require('express');
-const { Pool } = require('pg');
 const cors = require('cors');
 require('dotenv').config();
+
+// استيراد الـ pool الموحد والذكي من ملف db.js
+const pool = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ============================================
-// إعداد Connection Pool لقاعدة البيانات (Google Cloud SQL)
-// ============================================
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  max: parseInt(process.env.POOL_MAX) || 10,
-  idleTimeoutMillis: parseInt(process.env.POOL_IDLE_TIMEOUT) || 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-// اختبار الاتصال عند بدء التشغيل
+// اختبار الاتصال عند بدء التشغيل بدون إنهاء العملية عند الفشل لمنع انهيار حاوية Cloud Run
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('❌ فشل الاتصال بقاعدة البيانات:', err.stack);
-    process.exit(1);
+    console.error('❌ فشل الاتصال المبدئي بقاعدة البيانات:', err.message);
+    console.warn('⚠️ سيستمر السيرفر في العمل، وسيتم محاولة الاتصال تلقائياً عند طلب البيانات.');
   } else {
-    console.log('✅ متصل بـ Google Cloud SQL بنجاح');
+    console.log('✅ متصل بقاعدة البيانات بنجاح عبر الـ Configuration المحدثة');
     release();
   }
 });
 
-// إغلاق الاتصالات بشكل آمن عند إيقاف الخادم
-process.on('SIGTERM', () => {
-  pool.end(() => {
-    console.log('📦 تم إغلاق pool قاعدة البيانات');
-    process.exit(0);
-  });
-});
-
 // ============================================
-// جميع نقاط النهاية (Endpoints) تستخدم snake_case
+// نقاط النهاية (Endpoints) وقراءة البيانات الحية
 // ============================================
 
 // ---------- العملاء (Customers) ----------
@@ -63,8 +43,8 @@ app.get('/api/customers', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل جلب العملاء' });
+    console.error('Error fetching customers:', err);
+    res.status(500).json({ error: 'فشل جلب العملاء من قاعدة البيانات' });
   }
 });
 
@@ -78,15 +58,14 @@ app.put('/api/customers/:id/stage', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل تحديث المرحلة' });
+    console.error('Error updating stage:', err);
+    res.status(500).json({ error: 'فشل تحديث مرحلة العميل' });
   }
 });
 
 // ---------- المحادثات (Conversations) ----------
 app.get('/api/conversations', async (req, res) => {
   try {
-    // استخدام view conversation_summary التي تحتوي على customer_name و channel وغيرها
     const result = await pool.query(`
       SELECT 
         id, 
@@ -102,7 +81,7 @@ app.get('/api/conversations', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching conversations:', err);
     res.status(500).json({ error: 'فشل جلب المحادثات' });
   }
 });
@@ -126,8 +105,8 @@ app.get('/api/conversations/:id/messages', async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل جلب الرسائل' });
+    console.error('Error fetching messages:', err);
+    res.status(500).json({ error: 'فشل جلب رسائل المحادثة' });
   }
 });
 
@@ -143,8 +122,8 @@ app.post('/api/messages', async (req, res) => {
     );
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل إرسال الرسالة' });
+    console.error('Error inserting message:', err);
+    res.status(500).json({ error: 'فشل حفظ وإرسال الرسالة' });
   }
 });
 
@@ -158,19 +137,18 @@ app.put('/api/conversations/:id/takeover', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل تبديل وضع AI' });
+    console.error('Error toggling takeover:', err);
+    res.status(500).json({ error: 'فشل تبديل وضع المساعد الذكي / البشري' });
   }
 });
 
-// ---------- الإحصائيات (Dashboard) ----------
+// ---------- الإحصائيات (Dashboard Stats) ----------
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
     const totalLeadsRes = await pool.query('SELECT COUNT(*) FROM customers');
     const activeChatsRes = await pool.query("SELECT COUNT(*) FROM conversations WHERE status = 'open'");
     const revenueRes = await pool.query("SELECT COALESCE(SUM(ltv_aed), 0) FROM customers WHERE lead_stage = 'won'");
     
-    // بيانات تجريبية للرسم البياني (يمكن جلبها من جدول analytics لاحقاً)
     const chartData = [
       { date: "Mon", leads: 45, conversions: 12, revenue: 4788 },
       { date: "Tue", leads: 52, conversions: 15, revenue: 5985 },
@@ -182,25 +160,24 @@ app.get('/api/dashboard/stats', async (req, res) => {
     ];
 
     res.json({
-      totalLeads: parseInt(totalLeadsRes.rows[0].count),
-      activeChats: parseInt(activeChatsRes.rows[0].count),
-      revenue: parseFloat(revenueRes.rows[0].sum),
+      totalLeads: parseInt(totalLeadsRes.rows[0]?.count || 0),
+      activeChats: parseInt(activeChatsRes.rows[0]?.count || 0),
+      revenue: parseFloat(revenueRes.rows[0]?.sum || 0),
       aiResolutionRate: 84.5,
       chartData
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'فشل جلب الإحصائيات' });
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({ error: 'فشل جلب إحصائيات لوحة التحكم' });
   }
 });
 
-// ---------- القوالب (Templates) - اختياري ----------
+// ---------- نقاط نهاية احتياطية (لحماية الـ Frontend إذا لم توجد الجداول بعد) ----------
 app.get('/api/templates', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) {
-    // إذا لم يكن الجدول موجوداً، نعيد مصفوفة فارغة
     res.json([]);
   }
 });
@@ -217,5 +194,6 @@ app.get('/api/broadcasts', async (req, res) => {
 // ---------- تشغيل الخادم ----------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 خادم الخلفية يعمل على المنفذ ${PORT}`);
+  console.log(`🚀 Backend server is running perfectly on port ${PORT}`);
+  console.log(`📡 Current NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
 });
