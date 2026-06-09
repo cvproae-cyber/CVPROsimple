@@ -160,11 +160,8 @@ app.get('/api/dashboard/stats', async (req, res) => {
       { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
     ];
 
-    // المعالجة الدقيقة والآمنة للحقول المسترجعة من مكتبة pg لمنع ظهور NaN في الواجهة
     const totalLeads = totalLeadsRes.rows[0] ? parseInt(totalLeadsRes.rows[0].count, 10) : 0;
     const activeChats = activeChatsRes.rows[0] ? parseInt(activeChatsRes.rows[0].count, 10) : 0;
-    
-    // فحص الحقول البديلة المسترجعة (coalesce أو sum) لتأمين النتيجة تماماً
     const rawRevenue = revenueRes.rows[0] ? (revenueRes.rows[0].coalesce || revenueRes.rows[0].sum || 0) : 0;
     const revenue = parseFloat(rawRevenue);
 
@@ -181,7 +178,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
   }
 });
 
-// ---------- نقاط نهاية احتياطية (لحماية الـ Frontend إذا لم توجد الجداول بعد) ----------
+// ---------- نقاط نهاية احتياطية ----------
 app.get('/api/templates', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
@@ -204,17 +201,16 @@ app.get('/api/broadcasts', async (req, res) => {
 // خدمة ملفات الـ Frontend وربط مسارات الـ SPA
 // ============================================
 
-// لخدمة مجلد المخرجات dist الثابت الناتج عن بناء Vite في نفس حاوية الخادم
+// خدمة ملفات الـ dist المستخرجة بعد البناء بنجاح
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// التوجيه الشامل (Catch-all): لحماية مسارات React Router (مثل /inbox) من خطأ Cannot GET عند عمل Refresh
+// حماية الـ React Router من خطأ Cannot GET عند الـ Refresh للمسارات الداخلية
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 // ---------- تشغيل الخادم ----------
-const PORT = process.env.PORT || 8080; // تم التعديل إلى المنفذ المتوافق مع متطلبات بيئة Cloud Run
+const PORT = process.env.PORT || 8080; 
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر الموحد يعمل بنجاح وكفاءة على بورت ${PORT}`);
-  console.log(`📡 بيئة العمل الحالية NODE_ENV: ${process.env.NODE_ENV || 'production'}`);
 });
