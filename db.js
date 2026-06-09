@@ -1,28 +1,42 @@
 const { Pool } = require('pg');
 
-// التحقق هل التطبيق يعمل على سيرفر كلاود رن أم محلياً
-const isProduction = process.env.K_SERVICE || process.env.NODE_ENV === 'production';
+// تحقق هل التطبيق يعمل على سيرفر كلاود رن أم محلياً
+const isProduction = process.env.NODE_ENV === 'production';
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  database: process.env.DB_NAME || 'cvpro_db',
-  password: process.env.DB_PASSWORD,
-  
-  // إذا كنا في الإنتاج نستخدم مسار الـ Socket الخاص بجوجل، محلياً نستخدم الـ IP
-  host: isProduction 
-    ? `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME || 'cvprosimple:me-west1:cvpro-postgres'}` 
-    : (process.env.DB_HOST || '127.0.0.1'),
-    
-  // البورت يتم إلغاؤه في السحاب لأن الاتصال عبر الـ Socket لا يحتاج بورت
-  port: isProduction ? undefined : (process.env.DB_PORT || 5432),
-  
-  max: parseInt(process.env.POOL_MAX) || 10,
-  idleTimeoutMillis: parseInt(process.env.POOL_IDLE_TIMEOUT) || 30000,
-  connectionTimeoutMillis: 2000,
-});
+let config = {};
 
-pool.on('error', (err, client) => {
-  console.error('⚠️ خطأ غير متوقع في قاعدة البيانات:', err.message);
+if (isProduction) {
+  // إعدادات الإنتاج على Cloud Run باستخدام Unix Domain Socket
+  // نقرأ اسم الـ Instance مباشرة من البيئة لتفادي أي اختلاف في الحروف
+  const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME || 'cvprosimple:me-west1:cvpro-postgres';
+  
+  config = {
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'CvproN8nSecure2026',
+    database: process.env.DB_NAME || 'cvpro_db',
+    // المسار القياسي للـ Sockets داخل حاويات جوجل سحابياً
+    host: `/cloudsql/${instanceConnectionName}`,
+    port: 5432
+  };
+  
+  console.log(`📡 محاولة الاتصال بـ Cloud SQL عبر الـ Socket: /cloudsql/${instanceConnectionName}`);
+} else {
+  // إعدادات التطوير المحلي (Local)
+  config = {
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || '127.0.0.1',
+    database: process.env.DB_NAME || 'cvpro_db',
+    password: process.env.DB_PASSWORD || 'CvproN8nSecure2026',
+    port: process.env.DB_PORT || 9470,
+  };
+  console.log('💻 الاتصال بقاعدة البيانات محلياً (Local Development Mode)');
+}
+
+const pool = new Pool(config);
+
+// التعامل مع الأخطاء المفاجئة للـ Client لمنع انهيار الخادم
+pool.on('error', (err) => {
+  console.error('🚨 خطأ غير متوقع في الـ PostgreSQL Pool Client:', err.message);
 });
 
 module.exports = pool;
