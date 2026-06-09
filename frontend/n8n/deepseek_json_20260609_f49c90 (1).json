@@ -1,0 +1,495 @@
+{
+  "name": "CVPro - Full API + WhatsApp AI (Fixed)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [48, 608],
+      "id": "webhook-whatsapp",
+      "name": "WhatsApp Webhook",
+      "webhookId": "6adcdba2-4628-4b20-8503-8776d8b16fe9"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [48, 800],
+      "id": "webhook-whatsapp-post",
+      "name": "WhatsApp Webhook POST",
+      "webhookId": "a1b2c3d4-0000-4abc-9abc-111222333555"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "leftValue": "={{ $json.body.entry[0].changes[0].value.messages[0].text.body }}",
+            "operator": { "type": "string", "operation": "exists" }
+          }],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [256, 800],
+      "id": "if-valid-message",
+      "name": "Is Valid Message?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, full_name, phone_number FROM customers WHERE phone_number = $1::text LIMIT 1;",
+        "options": { "queryReplacement": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [464, 800],
+      "id": "check-lead-postgres",
+      "name": "Check Lead in Postgres",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].text.body }}",
+        "options": {
+          "systemMessage": "أنت مساعد مبيعات ذكي لمنصة CVPro... (نفس النظام القديم)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [672, 800],
+      "id": "ai-agent",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "projectId": { "__rl": true, "value": "cvprosimple", "mode": "id" },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleVertex",
+      "typeVersion": 1,
+      "position": [640, 1024],
+      "id": "vertex-model",
+      "name": "Google Vertex Chat Model",
+      "credentials": { "googleApi": { "id": "3ow7tBvMPWsZECQo", "name": "Google Service Account account" } }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [768, 1024],
+      "id": "chat-memory",
+      "name": "Postgres Chat Memory",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v20.0/1152244467965182/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": {{ JSON.stringify($('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from) }},\n  \"type\": \"text\",\n  \"text\": { \"preview_url\": false, \"body\": {{ JSON.stringify($json.output) }} }\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [912, 800],
+      "id": "send-wa-response",
+      "name": "Send WhatsApp Response",
+      "credentials": { "httpHeaderAuth": { "id": "5f7wrRC9Ah7kVg0J", "name": "Header Auth account" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) \nVALUES (\n  (SELECT id FROM conversations WHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1) LIMIT 1),\n  (SELECT id FROM customers WHERE phone_number = $1),\n  $2,\n  'outbound',\n  true,\n  NOW()\n);\nUPDATE conversations \nSET last_message = $2, updated_at = NOW() \nWHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1);",
+        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from, $('AI Agent').item.json.output ] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1136, 800],
+      "id": "sync-to-crm",
+      "name": "Sync to Postgres CRM",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "path": "api/customers",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 400],
+      "id": "webhook-customers",
+      "name": "GET /api/customers"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, full_name, phone_number, lead_stage, buying_intent_score, language, country, ltv_aed, created_at FROM customers ORDER BY created_at DESC;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 400],
+      "id": "get-customers",
+      "name": "Get Customers",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, 400],
+      "id": "respond-customers",
+      "name": "Respond Customers"
+    },
+    {
+      "parameters": {
+        "path": "api/conversations",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 208],
+      "id": "webhook-conversations",
+      "name": "GET /api/conversations"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, customer_id, customer_name, channel, status, human_takeover, last_message, updated_at FROM conversation_summary ORDER BY updated_at DESC;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 208],
+      "id": "get-conversations",
+      "name": "Get Conversations",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, 208],
+      "id": "respond-conversations",
+      "name": "Respond Conversations"
+    },
+    {
+      "parameters": {
+        "path": "api/conversations/messages",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-16, 0],
+      "id": "webhook-messages",
+      "name": "GET /api/conversations/messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "const conversationId = $input.item.json.query.conversationId;\nif (!conversationId) throw new Error('Missing conversationId');\nreturn [{ json: { conversation_id: conversationId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "id": "extract-conv-id",
+      "name": "Extract Conversation ID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, conversation_id, customer_id, content, direction, is_ai_generated, created_at FROM messages WHERE conversation_id = $1::uuid ORDER BY created_at ASC;",
+        "options": { "queryReplacement": "={{ $json.conversation_id }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [464, 0],
+      "id": "get-messages",
+      "name": "Get Messages by Conversation",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" },
+              { "name": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [704, 0],
+      "id": "respond-messages",
+      "name": "Respond Messages"
+    },
+    {
+      "parameters": {
+        "httpMethod": "PUT",
+        "path": "api/customers/stage",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-16, -672],
+      "id": "webhook-update-stage",
+      "name": "PUT /api/customers/stage"
+    },
+    {
+      "parameters": {
+        "jsCode": "const customerId = $input.item.json.query.customerId;\nconst leadStage = $input.item.json.query.leadStage;\nif (!customerId || !leadStage) throw new Error('Missing customerId or leadStage');\nreturn [{ json: { customerId, leadStage } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, -672],
+      "id": "extract-stage",
+      "name": "Extract Stage Params"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET lead_stage = $1, updated_at = NOW() WHERE id = $2::uuid RETURNING id, lead_stage;",
+        "options": { "queryReplacement": "={{ [$json.leadStage, $json.customerId] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [464, -672],
+      "id": "update-stage",
+      "name": "Update Customer Stage",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" },
+              { "name": "Access-Control-Allow-Methods", "value": "PUT, OPTIONS" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [704, -672],
+      "id": "respond-stage",
+      "name": "Respond Stage Update"
+    },
+    {
+      "parameters": {
+        "httpMethod": "PUT",
+        "path": "api/conversations/takeover",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-16, -432],
+      "id": "webhook-takeover",
+      "name": "PUT /api/conversations/takeover"
+    },
+    {
+      "parameters": {
+        "jsCode": "const conversationId = $input.item.json.query.conversationId;\nconst humanTakeover = $input.item.json.query.humanTakeover === 'true';\nif (!conversationId) throw new Error('Missing conversationId');\nreturn [{ json: { conversationId, humanTakeover } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, -432],
+      "id": "extract-takeover",
+      "name": "Extract Takeover Params"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE conversations SET human_takeover = $1, updated_at = NOW() WHERE id = $2::uuid RETURNING id, human_takeover;",
+        "options": { "queryReplacement": "={{ [$json.humanTakeover, $json.conversationId] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [464, -432],
+      "id": "update-takeover",
+      "name": "Update Takeover Status",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" },
+              { "name": "Access-Control-Allow-Methods", "value": "PUT, OPTIONS" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [704, -432],
+      "id": "respond-takeover",
+      "name": "Respond Takeover Update"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/messages",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "https://cvpro-frontend-1046523361460.me-west1.run.app" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-16, -192],
+      "id": "webhook-send-message",
+      "name": "POST /api/messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst conversationId = body.conversationId;\nconst content = body.content;\nif (!conversationId || !content) throw new Error('Missing conversationId or content');\nreturn [{ json: { conversationId, content } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, -192],
+      "id": "extract-message",
+      "name": "Extract Message Params"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.phone_number FROM customers c JOIN conversations conv ON conv.customer_id = c.id WHERE conv.id = $1::uuid LIMIT 1;",
+        "options": { "queryReplacement": "={{ $json.conversationId }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [464, -192],
+      "id": "get-phone",
+      "name": "Get Phone Number",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at)\nSELECT $1::uuid, conv.customer_id, $2, 'outbound', false, NOW()\nFROM conversations conv\nWHERE conv.id = $1::uuid\nRETURNING id, conversation_id, content, direction, created_at;",
+        "options": { "queryReplacement": "={{ [$json.conversationId, $json.content] }}" }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [704, -192],
+      "id": "insert-message",
+      "name": "Insert Outbound Message",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v20.0/1152244467965182/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": {{ JSON.stringify($('Get Phone Number').item.json.phone_number) }},\n  \"type\": \"text\",\n  \"text\": { \"preview_url\": false, \"body\": {{ JSON.stringify($('Extract Message Params').item.json.content) }} }\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [944, -192],
+      "id": "send-wa-dashboard",
+      "name": "Send WhatsApp from Dashboard",
+      "credentials": { "httpHeaderAuth": { "id": "5f7wrRC9Ah7kVg0J", "name": "Header Auth account" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "https://cvpro-frontend-1046523361460.me-west1.run.app" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1184, -192],
+      "id": "respond-message",
+      "name": "Respond Message Sent"
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": { "main": [[{ "node": "Is Valid Message?", "type": "main", "index": 0 }]] },
+    "Is Valid Message?": { "main": [[{ "node": "Check Lead in Postgres", "type": "main", "index": 0 }]] },
+    "Check Lead in Postgres": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "AI Agent": { "main": [[{ "node": "Send WhatsApp Response", "type": "main", "index": 0 }]] },
+    "Google Vertex Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "Postgres Chat Memory": { "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]] },
+    "Send WhatsApp Response": { "main": [[{ "node": "Sync to Postgres CRM", "type": "main", "index": 0 }]] },
+    "GET /api/customers": { "main": [[{ "node": "Get Customers", "type": "main", "index": 0 }]] },
+    "Get Customers": { "main": [[{ "node": "Respond Customers", "type": "main", "index": 0 }]] },
+    "GET /api/conversations": { "main": [[{ "node": "Get Conversations", "type": "main", "index": 0 }]] },
+    "Get Conversations": { "main": [[{ "node": "Respond Conversations", "type": "main", "index": 0 }]] },
+    "GET /api/conversations/messages": { "main": [[{ "node": "Extract Conversation ID", "type": "main", "index": 0 }]] },
+    "Extract Conversation ID": { "main": [[{ "node": "Get Messages by Conversation", "type": "main", "index": 0 }]] },
+    "Get Messages by Conversation": { "main": [[{ "node": "Respond Messages", "type": "main", "index": 0 }]] },
+    "PUT /api/customers/stage": { "main": [[{ "node": "Extract Stage Params", "type": "main", "index": 0 }]] },
+    "Extract Stage Params": { "main": [[{ "node": "Update Customer Stage", "type": "main", "index": 0 }]] },
+    "Update Customer Stage": { "main": [[{ "node": "Respond Stage Update", "type": "main", "index": 0 }]] },
+    "PUT /api/conversations/takeover": { "main": [[{ "node": "Extract Takeover Params", "type": "main", "index": 0 }]] },
+    "Extract Takeover Params": { "main": [[{ "node": "Update Takeover Status", "type": "main", "index": 0 }]] },
+    "Update Takeover Status": { "main": [[{ "node": "Respond Takeover Update", "type": "main", "index": 0 }]] },
+    "POST /api/messages": { "main": [[{ "node": "Extract Message Params", "type": "main", "index": 0 }]] },
+    "Extract Message Params": { "main": [[{ "node": "Get Phone Number", "type": "main", "index": 0 }]] },
+    "Get Phone Number": { "main": [
+      [{ "node": "Insert Outbound Message", "type": "main", "index": 0 }],
+      [{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]
+    ] },
+    "Insert Outbound Message": { "main": [] },
+    "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1", "binaryMode": "separate" },
+  "versionId": "final-v1",
+  "meta": { "instanceId": "fd7f2e0214133b729d50e2e27f539e87389762f7eb278df76909548cc7c3904d" },
+  "id": "DP6A7yjiFMVt9qYt",
+  "tags": []
+}
