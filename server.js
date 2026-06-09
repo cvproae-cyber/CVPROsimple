@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-// استيراد الـ pool الموحد والذكي من ملف db.js الذي يدعم التوصيل السحابي التلقائي عبر الـ Socket
+// استيراد الـ pool الموحد والذكي من ملف db.js الذي يدعم التوصيل السحابي عبر الـ Socket تلقائياً
 const pool = require('./db');
 
 const app = express();
@@ -160,11 +160,11 @@ app.get('/api/dashboard/stats', async (req, res) => {
       { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
     ];
 
-    // التعديل الأخير والأهم: معالجة وقراءة أسماء الحقول الراجعة من مكتبة pg بدقة لمنع الـ NaN
+    // المعالجة الدقيقة والآمنة للحقول المسترجعة من مكتبة pg لمنع ظهور NaN في الواجهة
     const totalLeads = totalLeadsRes.rows[0] ? parseInt(totalLeadsRes.rows[0].count, 10) : 0;
     const activeChats = activeChatsRes.rows[0] ? parseInt(activeChatsRes.rows[0].count, 10) : 0;
     
-    // فحص الحقل كـ coalesce أو sum تبعاً لرد محرك قاعدة البيانات
+    // فحص الحقول البديلة المسترجعة (coalesce أو sum) لتأمين النتيجة تماماً
     const rawRevenue = revenueRes.rows[0] ? (revenueRes.rows[0].coalesce || revenueRes.rows[0].sum || 0) : 0;
     const revenue = parseFloat(rawRevenue);
 
@@ -204,16 +204,16 @@ app.get('/api/broadcasts', async (req, res) => {
 // خدمة ملفات الـ Frontend وربط مسارات الـ SPA
 // ============================================
 
-// خدمة المجلد المترجم من واجهة Vite بعد الـ Build
+// لخدمة مجلد المخرجات dist الثابت الناتج عن بناء Vite في نفس حاوية الخادم
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// التوجيه الشامل (Catch-all): يضمن عدم ظهور خطأ Cannot GET عند عمل Refresh داخل صفحات React Router
+// التوجيه الشامل (Catch-all): لحماية مسارات React Router (مثل /inbox) من خطأ Cannot GET عند عمل Refresh
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 // ---------- تشغيل الخادم ----------
-const PORT = process.env.PORT || 8080; // متوافق تماماً مع منفذ Cloud Run الافتراضي
+const PORT = process.env.PORT || 8080; // تم التعديل إلى المنفذ المتوافق مع متطلبات بيئة Cloud Run
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر الموحد يعمل بنجاح وكفاءة على بورت ${PORT}`);
   console.log(`📡 بيئة العمل الحالية NODE_ENV: ${process.env.NODE_ENV || 'production'}`);
