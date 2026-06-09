@@ -1,30 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Badge, Button } from '../components/ui';
-import { Code2, Globe2, Tag } from 'lucide-react';
+import { Code2, Globe2, Tag, AlertCircle, RefreshCw } from 'lucide-react';
 import { Template } from '../types';
 import { fetchTemplates } from '../services/api';
-import { MOCK_TEMPLATES } from '../constants';
 
 export const Templates: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadTemplates = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await fetchTemplates();
+      setTemplates(data);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to load templates. Check n8n connectivity.');
+      setTemplates([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadTemplates();
   }, []);
 
-  const loadTemplates = async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchTemplates();
-      setTemplates(data.length > 0 ? data : MOCK_TEMPLATES);
-    } catch (err) {
-      console.error(err);
-      setTemplates(MOCK_TEMPLATES);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="p-8 flex-1 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 flex-1 flex flex-col items-center justify-center gap-4">
+        <div className="bg-destructive/10 p-4 rounded-full">
+          <AlertCircle className="h-12 w-12 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold">Unable to load templates</h2>
+        <p className="text-muted-foreground text-center max-w-md">{error}</p>
+        <Button onClick={loadTemplates} variant="outline">
+          <RefreshCw className="mr-2 h-4 w-4" /> Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6 flex-1 overflow-auto">
@@ -33,12 +58,14 @@ export const Templates: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight">Message Templates</h1>
           <p className="text-muted-foreground">Manage WhatsApp/Instagram templates.</p>
         </div>
-        <Button variant="outline" onClick={loadTemplates}>Refresh</Button>
+        <Button onClick={loadTemplates} variant="outline" size="sm">
+          <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+        </Button>
       </div>
       
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      {templates.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+          No templates found. Add some in the database.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

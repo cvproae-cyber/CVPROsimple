@@ -20,7 +20,8 @@ export const CVAnalyzer: React.FC = () => {
       const analysis = await analyzeCVText(cvText);
       setResult(analysis);
     } catch (err: any) {
-      setError(err.message || "Failed to analyze CV. Please check your API key and try again.");
+      console.error(err);
+      setError(err.message || "Failed to analyze CV. Please check n8n connectivity and try again.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -29,14 +30,15 @@ export const CVAnalyzer: React.FC = () => {
   const handleClear = useCallback(() => {
     setCvText('');
     setResult(null);
-  }, [cvText]);
+    setError(null);
+  }, []);
 
   return (
     <div className="p-8 space-y-6 flex-1 overflow-auto flex flex-col lg:flex-row gap-8">
       <div className="flex-1 flex flex-col space-y-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI CV Analyzer</h1>
-          <p className="text-muted-foreground">Powered by Gemini 2.5 Flash</p>
+          <p className="text-muted-foreground">Powered by Gemini 2.5 Flash via n8n</p>
         </div>
         
         <Card className="flex-1 flex flex-col min-h-[500px]">

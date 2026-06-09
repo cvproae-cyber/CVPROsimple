@@ -1,22 +1,17 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     return {
-      define: {
-        // This is just generic value for the GEMINI API key.
-        // This is not used at all, and can be ignored!
-        'process.env.API_KEY' : JSON.stringify('api-key-this-is-not-used-can-be-ignored!'),
-      },
       server: {
-        proxy: {
-          // Proxy is now only for local development redirecting to n8n
-          // In production, the frontend should call the absolute N8N URL
-          '/api-dev': 'http://localhost:5678/webhook',
-        },
+        // Proxy for local development – if you need to call n8n locally, uncomment and adjust
+        // proxy: {
+        //   '/api': 'http://localhost:5678'
+        // }
       },
-      plugins: react(),
+      plugins: [react()],
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

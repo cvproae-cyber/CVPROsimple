@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Badge, Button } from '../components/ui';
-import { Database, Cloud, MessageCircle, CreditCard, FileSearch, Mic, ShieldCheck, BarChart4, ArrowRight, Workflow, Cpu, Video, Send, Mail } from 'lucide-react';
+import { Database, Cloud, MessageCircle, CreditCard, FileSearch, Mic, ShieldCheck, BarChart4, ArrowRight, Workflow, Cpu, Video, Send, Mail, RefreshCw } from 'lucide-react';
 
 export const Integrations: React.FC = () => {
   const integrations = [
@@ -18,6 +18,7 @@ export const Integrations: React.FC = () => {
       status: "Required",
       category: "Database"
     },
+    // ... باقي التكاملات كما هي (نفس المحتوى القديم)
     {
       title: "Meta Graph API",
       description: "Official WhatsApp Business, Facebook, and Instagram DM integration.",
@@ -62,6 +63,11 @@ export const Integrations: React.FC = () => {
     }
   ];
 
+  // Fake refresh function (could be extended to check connectivity)
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
   return (
     <div className="p-8 space-y-6 flex-1 overflow-auto">
       <div className="flex justify-between items-end">
@@ -69,6 +75,9 @@ export const Integrations: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight">System Architecture & Integrations</h1>
           <p className="text-muted-foreground mt-1">How to turn this frontend dashboard into a fully functional production system.</p>
         </div>
+        <Button onClick={handleRefresh} variant="outline" size="sm">
+          <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+        </Button>
       </div>
 
       {/* How it works section */}
@@ -154,8 +163,8 @@ export const Integrations: React.FC = () => {
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
                 {item.description}
               </p>
-              <Button variant={item.status === 'Connected' ? 'outline' : 'secondary'} className="w-full">
-                {item.status === 'Connected' ? 'Configure' : 'View Setup Guide'}
+              <Button variant="secondary" className="w-full">
+                View Setup Guide
               </Button>
             </CardContent>
           </Card>

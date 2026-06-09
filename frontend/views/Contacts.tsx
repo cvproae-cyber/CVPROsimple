@@ -1,38 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, Input, Badge, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Select } from '../components/ui';
-import { Search } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Input, Badge, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Select, Button } from '../components/ui';
+import { Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { Customer } from '../types';
 import { fetchCustomers } from '../services/api';
-import { MOCK_CUSTOMERS } from '../constants';
 
 export const Contacts: React.FC = () => {
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadCustomers();
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const loadCustomers = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await fetchCustomers();
-      setCustomers(data.length > 0 ? data : MOCK_CUSTOMERS);
-    } catch (err) {
-      console.error(err);
-      setCustomers(MOCK_CUSTOMERS);
+      setCustomers(data);
+    } catch (err: any) {
+      console.error('Error loading customers:', err);
+      setError(err.message || 'فشل تحميل جهات الاتصال. تأكد من اتصال n8n.');
+      setCustomers([]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
 
   const filteredContacts = customers.filter(c => {
     const matchesSearch = c.full_name.toLowerCase().includes(search.toLowerCase()) || c.phone_number.includes(search);
     const matchesStage = stageFilter === 'all' || c.lead_stage === stageFilter;
     return matchesSearch && matchesStage;
   });
+
+  if (isLoading) {
+    return (
+      <div className="p-8 flex-1 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 flex-1 flex flex-col items-center justify-center gap-4">
+        <div className="bg-destructive/10 p-4 rounded-full">
+          <AlertCircle className="h-12 w-12 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold">تعذر تحميل جهات الاتصال</h2>
+        <p className="text-muted-foreground text-center max-w-md">{error}</p>
+        <Button onClick={loadCustomers} variant="outline">
+          <RefreshCw className="mr-2 h-4 w-4" /> إعادة المحاولة
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6 flex-1 overflow-auto">
@@ -41,9 +66,9 @@ export const Contacts: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight">جهات الاتصال</h1>
           <p className="text-muted-foreground">إدارة العملاء وتتبع التحويلات</p>
         </div>
-        <button onClick={loadCustomers} className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md text-sm">
-          تحديث البيانات
-        </button>
+        <Button onClick={loadCustomers} variant="outline" size="sm">
+          <RefreshCw className="mr-2 h-4 w-4" /> تحديث البيانات
+        </Button>
       </div>
 
       <div className="flex gap-4">
@@ -75,10 +100,12 @@ export const Contacts: React.FC = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center">جار التحميل...</TableCell></TableRow>
-            ) : filteredContacts.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center">لا توجد جهات اتصال</TableCell></TableRow>
+            {filteredContacts.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  لا توجد جهات اتصال تطابق المعايير
+                </TableCell>
+              </TableRow>
             ) : (
               filteredContacts.map(c => (
                 <TableRow key={c.id}>
