@@ -1,60 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
-import { Users, MessageSquare, DollarSign, TrendingUp } from 'lucide-react';
+import { Users, MessageSquare, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
 import { fetchDashboardStats } from '../services/api';
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadStats();
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const loadStats = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await fetchDashboardStats();
-      // If Supabase is empty/not connected, fallback to mock data
-      if (data.totalLeads === 0 && data.revenue === 0) {
+      setStats(data);
+    } catch (err: any) {
+      console.error('Dashboard error:', err);
+      setError(err.message || 'Failed to load dashboard data. Check n8n connectivity.');
+      // In development only, show mock data as fallback
+      if (import.meta.env.DEV) {
         setStats({
           totalLeads: 12484,
           activeChats: 142,
           revenue: 34314,
           aiResolutionRate: 84.5,
-          chartData: data.chartData
+          chartData: [
+            { date: "Mon", leads: 45, conversions: 12, revenue: 4788 },
+            { date: "Tue", leads: 52, conversions: 15, revenue: 5985 },
+            { date: "Wed", leads: 38, conversions: 10, revenue: 3990 },
+            { date: "Thu", leads: 65, conversions: 22, revenue: 8778 },
+            { date: "Fri", leads: 48, conversions: 14, revenue: 5586 },
+            { date: "Sat", leads: 25, conversions: 5, revenue: 1995 },
+            { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
+          ]
         });
-      } else {
-        setStats(data);
       }
-    } catch (err) {
-      console.error(err);
-      // Fallback
-      setStats({
-        totalLeads: 12484,
-        activeChats: 142,
-        revenue: 34314,
-        aiResolutionRate: 84.5,
-        chartData: [
-          { date: "Mon", leads: 45, conversions: 12, revenue: 4788 },
-          { date: "Tue", leads: 52, conversions: 15, revenue: 5985 },
-          { date: "Wed", leads: 38, conversions: 10, revenue: 3990 },
-          { date: "Thu", leads: 65, conversions: 22, revenue: 8778 },
-          { date: "Fri", leads: 48, conversions: 14, revenue: 5586 },
-          { date: "Sat", leads: 25, conversions: 5, revenue: 1995 },
-          { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
-        ]
-      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading || !stats) {
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  if (isLoading) {
     return (
       <div className="p-8 flex-1 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="p-8 flex-1 flex flex-col items-center justify-center gap-4">
+        <div className="bg-destructive/10 p-4 rounded-full">
+          <AlertCircle className="h-12 w-12 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold">Unable to load dashboard</h2>
+        <p className="text-muted-foreground text-center max-w-md">{error || 'No data available'}</p>
+        <button 
+          onClick={loadStats} 
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+        >
+          Retry
+        </button>
       </div>
     );
   }

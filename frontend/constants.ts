@@ -1,17 +1,11 @@
 import { Customer, Conversation, Message, Broadcast, Template } from './types';
 
-// الاعتماد على المسار النسبي ليتكفل خادم الويب بتوجيهه عبر البروكسي الداخلي
-export const API_BASE_URL = '/api';
+// The frontend now uses n8n webhooks exclusively via api.ts.
+// API_BASE_URL is defined in api.ts using VITE_N8N_URL.
+// This file only contains mock data for development/fallback.
 
-export const API_ENDPOINTS = {
-  DASHBOARD_STATS: `${API_BASE_URL}/dashboard/stats`,
-  CUSTOMERS: `${API_BASE_URL}/customers`,
-  CONVERSATIONS: `${API_BASE_URL}/conversations`,
-  MESSAGES: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/messages`,
-  TEMPLATES: `${API_BASE_URL}/templates`,
-};
+export const API_BASE_URL = '/api'; // kept for reference only, not used
 
-// الـ Fallbacks والـ Mock Data في حال عدم الاتصال أو للتطوير السريع
 export const MOCK_CUSTOMERS: Customer[] = [
   {
     id: '1',
@@ -45,7 +39,7 @@ export const MOCK_MESSAGES: Record<string, Message[]> = {
       id: 'm1',
       conversation_id: 'c1',
       customer_id: '1',
-      content: 'أحتاج مساعدة فهاشن هاشم ي سيرتي الذاتية',
+      content: 'أحتاج مساعدة في سيرتي الذاتية',
       direction: 'inbound',
       is_ai_generated: false,
       created_at: new Date().toISOString(),
