@@ -1,6 +1,9 @@
 import { Customer, Conversation, Message, Broadcast, Template } from '../types';
 
-const API_BASE = '/api'; // سيتحول إلى n8n لاحقاً
+// PRODUCTION URL: Replace with your actual n8n instance URL
+// Ensure it ends with /webhook so that paths like /api/customers work correctly.
+const N8N_INSTANCE_URL = 'https://n8n.yourdomain.com'; 
+const API_BASE = `${N8N_INSTANCE_URL}/webhook`;
 
 // ----------------------------------------------
 // 1. العملاء
@@ -52,7 +55,7 @@ export async function insertOutboundMessage(
   const res = await fetch(`${API_BASE}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversationId: conversation_id, content }),
+    body: JSON.stringify({ conversationId: conversation_id, customerId: customer_id, content }),
   });
   if (!res.ok) throw new Error('Failed to send message');
 }

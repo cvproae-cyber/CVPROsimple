@@ -147,7 +147,7 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) \nVALUES (\n  (SELECT id FROM conversations WHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1) LIMIT 1),\n  (SELECT id FROM customers WHERE phone_number = $1),\n  $2,\n  'outbound',\n  true,\n  NOW()\n);\nUPDATE conversations \nSET last_message = $2, updated_at = NOW() \nWHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1);",
-        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from, $('AI Agent').item.json.output ] }}" }
+        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from, $json.output ] }}" }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
@@ -484,6 +484,42 @@
       "position": [1184, -192],
       "id": "respond-message",
       "name": "Respond Message Sent"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/analyze-cv",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-16, -900],
+      "id": "webhook-analyze",
+      "name": "POST /api/analyze-cv"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.cvText }}",
+        "options": { "systemMessage": "Analyze the CV and return a JSON with score, strengths, and weaknesses." }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [224, -900],
+      "id": "cv-analyzer-agent",
+      "name": "CV Analysis Agent"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -900],
+      "id": "respond-analysis",
+      "name": "Respond Analysis"
     }
   ],
   "connections": {
@@ -511,10 +547,11 @@
     "Update Takeover Status": { "main": [[{ "node": "Respond Takeover Update", "type": "main", "index": 0 }]] },
     "POST /api/messages": { "main": [[{ "node": "Extract Message Params", "type": "main", "index": 0 }]] },
     "Extract Message Params": { "main": [[{ "node": "Get Phone Number", "type": "main", "index": 0 }]] },
-    "Get Phone Number": { "main": [[
-      { "node": "Insert Outbound Message", "type": "main", "index": 0 },
-      { "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }
-    ]] },
+    "Get Phone Number": { "main": [[{ "node": "Insert Outbound Message", "type": "main", "index": 0 }]] },
+    "Insert Outbound Message": { "main": [[{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]] },
+    "POST /api/analyze-cv": { "main": [[{ "node": "cv-analyzer-agent", "type": "main", "index": 0 }]] },
+    "cv-analyzer-agent": { "main": [[{ "node": "respond-analysis", "type": "main", "index": 0 }]] },
+    "vertex-model": { "ai_languageModel": [[{ "node": "cv-analyzer-agent", "type": "ai_languageModel", "index": 0 }]] },
     "Insert Outbound Message": { "main": [] },
     "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
   },

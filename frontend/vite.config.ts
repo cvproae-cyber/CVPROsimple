@@ -11,9 +11,9 @@ export default defineConfig(({ mode }) => {
       },
       server: {
         proxy: {
-          //Target your Node.js backend
-          '/api': 'http://localhost:5000',
-          '/ws-proxy': {target: 'ws://localhost:5000', ws: true},
+          // Proxy is now only for local development redirecting to n8n
+          // In production, the frontend should call the absolute N8N URL
+          '/api-dev': 'http://localhost:5678/webhook',
         },
       },
       plugins: react(),
