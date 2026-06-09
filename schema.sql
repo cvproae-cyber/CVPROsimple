@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 -- Index for faster joins between customers and conversations
 CREATE INDEX IF NOT EXISTS idx_conversations_customer_id ON conversations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
 
 -- جدول الرسائل
 CREATE TABLE IF NOT EXISTS messages (
