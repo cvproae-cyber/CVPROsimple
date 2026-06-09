@@ -1,5 +1,23 @@
 import { Customer, Conversation, Message, Broadcast, Template } from './types';
 
+// ============================================================================
+// 1. روابط الـ API الأساسية (بناءً على نظام الحاوية الواحدة المدمجة)
+// ============================================================================
+// نستخدم مسار نسبي لأن الفرونت إند والباك إند يخرجان من نفس رابط الـ Cloud Run
+export const API_BASE_URL = '/api';
+
+export const API_ENDPOINTS = {
+  DASHBOARD_STATS: `${API_BASE_URL}/stats`,
+  CUSTOMERS: `${API_BASE_URL}/customers`,
+  CONVERSATIONS: `${API_BASE_URL}/conversations`,
+  MESSAGES: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/messages`,
+  TEMPLATES: `${API_BASE_URL}/templates`,
+};
+
+// ============================================================================
+// 2. البيانات الاحتياطية (Mock Data Fallbacks) للبيئة المحلية والتطوير
+// ============================================================================
+
 export const MOCK_CUSTOMERS: Customer[] = [
   {
     id: '1',
@@ -10,7 +28,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     language: 'ar',
     country: 'AE',
     ltv_aed: 0,
-    created_at: '2025-03-01T10:00:00Z',
+    created_at: '2026-03-01T10:00:00Z',
   },
   {
     id: '2',
@@ -21,7 +39,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     language: 'en',
     country: 'AE',
     ltv_aed: 0,
-    created_at: '2025-03-02T14:30:00Z',
+    created_at: '2026-03-02T14:30:00Z',
   },
   {
     id: '3',
@@ -32,7 +50,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     language: 'ar',
     country: 'SA',
     ltv_aed: 0,
-    created_at: '2025-03-03T09:15:00Z',
+    created_at: '2026-03-03T09:15:00Z',
   },
 ];
 
@@ -102,7 +120,7 @@ export const MOCK_BROADCASTS: Broadcast[] = [
     sentCount: 4500,
     deliveredCount: 4420,
     readCount: 3800,
-    createdAt: '2025-02-28T10:00:00Z',
+    createdAt: '2026-02-28T10:00:00Z',
   },
 ];
 
@@ -122,3 +140,20 @@ export const MOCK_TEMPLATES: Template[] = [
     content: 'Welcome {{full_name}}! How can we help you today?',
   },
 ];
+
+// ============================================================================
+// 3. دوال مساعدة لجلب البيانات (API Fetchers)
+// ============================================================================
+
+export async function fetchFromAPI(endpoint: string, options?: RequestInit) {
+  try {
+    const response = await fetch(endpoint, options);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn(`⚠️ Failed to fetch from API (${endpoint}), using local fallback data.`, error);
+    return null;
+  }
+}
