@@ -1,26 +1,35 @@
-# استخدام نسخة مستقرة من Node.js
-FROM node:20-slim
-
-# تحديد مجلد العمل داخل الحاوية
+# --- المرحلة الأولى: بناء ملفات الـ Frontend ---
+FROM node:20-slim AS frontend-builder
 WORKDIR /app
 
-# نسخ ملفات تعريف المكتبات من مجلد frontend
-COPY frontend/package*.json ./
+# نسخ ملفات package.json الخاصة بالفرونت إند وتثبيت حزمه
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm install
 
-# تثبيت المكتبات
-RUN npm install
+# نسخ كود الفرونت إند بالكامل وعمل Build لإنتاج مجلد dist
+COPY frontend/ ./frontend/
+RUN cd frontend && npm run build
 
-# نسخ كود المشروع بالكامل من مجلد frontend إلى مجلد العمل داخل الحاوية
-COPY frontend/ .
+# --- المرحلة الثانية: تجهيز سيرفر الإنتاج المشترك ---
+FROM node:20-slim
+WORKDIR /app
 
-# بناء ملفات الفرونت-إند (Vite build) لإنشاء مجلد dist
-RUN npm run build
-
-# تحديد البيئة كإنتاج
+# تعيين متغير البيئة للإنتاج
 ENV NODE_ENV=production
+ENV PORT=8080
 
-# فتح المنفذ الذي يستخدمه السيرفر
+# نسخ ملفات package.json الخاصة بالجذر (الباك إند) وتثبيت الحزم الأساسية للإنتاج
+COPY package*.json ./
+RUN npm install --only=production
+
+# نسخ ملفات السيرفر والاتصال بقاعدة البيانات من الجذر
+COPY server.js db.js ./
+
+# نسخ المجلد المترجم (dist) من المرحلة الأولى إلى المكان الذي يتوقعه سيرفر Express
+COPY --from=frontend-builder /app/frontend/dist ./dist
+
+# فتح البورت المتوقع من Cloud Run
 EXPOSE 8080
 
-# أمر التشغيل الرئيسي
+# تشغيل السيرفر الرئيسي اللي بيربط كل حاجة ببعض
 CMD ["node", "server.js"]

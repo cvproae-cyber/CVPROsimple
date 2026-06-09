@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
-// استيراد الـ pool الموحد والذكي من ملف db.js
+// استيراد الـ pool الموحد والذكي من ملف db.js الذي يدعم الـ Unix Socket تلقائياً
 const pool = require('./db');
 
 const app = express();
@@ -159,10 +160,15 @@ app.get('/api/dashboard/stats', async (req, res) => {
       { date: "Sun", leads: 30, conversions: 8, revenue: 3192 },
     ];
 
+    // تصحيح منطق الـ Parsing لتأمين الـ Rows بشكل كامل
+    const totalLeads = totalLeadsRes.rows[0] ? parseInt(totalLeadsRes.rows[0].count, 10) : 0;
+    const activeChats = activeChatsRes.rows[0] ? parseInt(activeChatsRes.rows[0].count, 10) : 0;
+    const revenue = revenueRes.rows[0] ? parseFloat(revenueRes.rows[0].coalesce) : 0.0;
+
     res.json({
-      totalLeads: parseInt(totalLeadsRes.rows[0]?.count || 0),
-      activeChats: parseInt(activeChatsRes.rows[0]?.count || 0),
-      revenue: parseFloat(revenueRes.rows[0]?.sum || 0),
+      totalLeads,
+      activeChats,
+      revenue,
       aiResolutionRate: 84.5,
       chartData
     });
@@ -191,9 +197,21 @@ app.get('/api/broadcasts', async (req, res) => {
   }
 });
 
+// ============================================
+// خدمة ملفات الـ Frontend (SPA Routing Fallback)
+// ============================================
+
+// خدمة الملفات الثابتة المستخرجة بعد البناء (Vite dist folder)
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// 💡 تضمن عدم ظهور خطأ "Cannot GET / مسار" عند عمل Refresh داخل صفحات التطبيق
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // ---------- تشغيل الخادم ----------
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080; // تم تعديل المنفذ الافتراضي ليتوافق مع بورت حاويات Cloud Run الافتراضي
 app.listen(PORT, () => {
   console.log(`🚀 Backend server is running perfectly on port ${PORT}`);
-  console.log(`📡 Current NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 Current NODE_ENV: ${process.env.NODE_ENV || 'production'}`);
 });
