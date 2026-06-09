@@ -1,3 +1,4 @@
+[
 {
   "name": "CVPro - Full API + WhatsApp AI (Fixed)",
   "nodes": [
@@ -557,8 +558,6 @@
     "POST /api/analyze-cv": { "main": [[{ "node": "cv-analyzer-agent", "type": "main", "index": 0 }]] },
     "cv-analyzer-agent": { "main": [[{ "node": "respond-analysis", "type": "main", "index": 0 }]] },
     "vertex-model": { "ai_languageModel": [[{ "node": "cv-analyzer-agent", "type": "ai_languageModel", "index": 0 }]] },
-    "GET /api/dashboard/stats": { "main": [[{ "node": "Get Real Stats", "type": "main", "index": 0 }]] },
-    "Get Real Stats": { "main": [[{ "node": "Respond Stats", "type": "main", "index": 0 }]] },
     "GET /api/templates": { "main": [[{ "node": "Get Templates DB", "type": "main", "index": 0 }]] },
     "Get Templates DB": { "main": [[{ "node": "Respond Templates", "type": "main", "index": 0 }]] }
   },
@@ -569,7 +568,7 @@
   "id": "DP6A7yjiFMVt9qYt",
   "tags": []
 }
-
+,
 {
   "name": "CVPro - Production API v1",
   "nodes": [
@@ -694,3 +693,4 @@
     "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
   }
 }
+]

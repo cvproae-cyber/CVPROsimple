@@ -64,7 +64,7 @@ export const Inbox: React.FC = () => {
     setInputText('');
     setIsSending(true);
     try {
-      await insertOutboundMessage(selectedId, selectedConv.customer_id, textToSend);
+      await insertOutboundMessage(selectedId, textToSend);
       const newUserMsg: Message = {
         id: Date.now().toString(),
         conversation_id: selectedId,
