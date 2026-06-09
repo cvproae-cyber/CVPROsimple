@@ -1,35 +1,36 @@
-# --- المرحلة الأولى: بناء ملفات الـ Frontend ---
-FROM node:20-slim AS frontend-builder
+# --- المرحلة الأولى: بناء واجهة الفرونت إند (Vite) ---
+FROM node:20-slim AS builder
 WORKDIR /app
 
-# نسخ ملفات package.json الخاصة بالفرونت إند وتثبيت حزمه
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
+# نسخ ملفات الحزم للجذر وتثبيتها لبناء الفرونت إند
+COPY package*.json ./
+RUN npm install
 
-# نسخ كود الفرونت إند بالكامل وعمل Build لإنتاج مجلد dist
-COPY frontend/ ./frontend/
-RUN cd frontend && npm run build
+# نسخ ملفات المشروع بالكامل (بما فيها index.html, App.tsx, constants.ts, vite.config.ts)
+COPY . .
 
-# --- المرحلة الثانية: تجهيز سيرفر الإنتاج المشترك ---
+# تنفيذ أمر بناء الفرونت إند لإنتاج مجلد dist الثابت
+RUN npx vite build
+
+# --- المرحلة الثانية: تجهيز الحاوية النهائية للإنتاج ---
 FROM node:20-slim
 WORKDIR /app
 
-# تعيين متغير البيئة للإنتاج
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# نسخ ملفات package.json الخاصة بالجذر (الباك إند) وتثبيت الحزم الأساسية للإنتاج
+# نسخ ملفات الحزم لتثبيت حزم الإنتاج فقط (Express, pg, dotenv, cors)
 COPY package*.json ./
 RUN npm install --only=production
 
-# نسخ ملفات السيرفر والاتصال بقاعدة البيانات من الجذر
+# نسخ ملفات السيرفر وقاعدة البيانات من الجذر
 COPY server.js db.js ./
 
-# نسخ المجلد المترجم (dist) من المرحلة الأولى إلى المكان الذي يتوقعه سيرفر Express
-COPY --from=frontend-builder /app/frontend/dist ./dist
+# نسخ المجلد المترجم dist من المرحلة الأولى لخدمته عبر Express
+COPY --from=builder /app/dist ./dist
 
-# فتح البورت المتوقع من Cloud Run
+# فتح منفذ الحاوية المتوافق مع إعدادات Cloud Run
 EXPOSE 8080
 
-# تشغيل السيرفر الرئيسي اللي بيربط كل حاجة ببعض
+# تشغيل السيرفر الموحد
 CMD ["node", "server.js"]
