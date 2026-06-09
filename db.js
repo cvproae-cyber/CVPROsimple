@@ -1,27 +1,27 @@
 const { Pool } = require('pg');
 
-// تحقق هل التطبيق يعمل على سيرفر كلاود رن أم محلياً
 const isProduction = process.env.NODE_ENV === 'production';
 
 let config = {};
 
 if (isProduction) {
-  // إعدادات الإنتاج على Cloud Run باستخدام Unix Domain Socket
-  // نقرأ اسم الـ Instance مباشرة من البيئة لتفادي أي اختلاف في الحروف
+  // اسم الاتصال بالـ Instance الراجع من المتغيرات بيئية Cloud Run
   const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME || 'cvprosimple:me-west1:cvpro-postgres';
   
   config = {
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'CvproN8nSecure2026',
     database: process.env.DB_NAME || 'cvpro_db',
-    // المسار القياسي للـ Sockets داخل حاويات جوجل سحابياً
-    host: `/cloudsql/${instanceConnectionName}`,
-    port: 5432
+    // هذا هو المسار الفعلي والمضمون لـ Unix Socket داخل حاويات Google Cloud Run
+    host: `/cloudsql/${instanceConnectionName}`, 
+    port: 5432,
+    // تحديد مهلة للاتصال لعدم تعليق الطلبات
+    connectionTimeoutMillis: 5000 
   };
   
-  console.log(`📡 محاولة الاتصال بـ Cloud SQL عبر الـ Socket: /cloudsql/${instanceConnectionName}`);
+  console.log(`📡 Production Mode: Connecting to Cloud SQL via Socket -> /cloudsql/${instanceConnectionName}`);
 } else {
-  // إعدادات التطوير المحلي (Local)
+  // إعدادات التطوير المحلي (Local Development)
   config = {
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || '127.0.0.1',
@@ -29,14 +29,14 @@ if (isProduction) {
     password: process.env.DB_PASSWORD || 'CvproN8nSecure2026',
     port: process.env.DB_PORT || 9470,
   };
-  console.log('💻 الاتصال بقاعدة البيانات محلياً (Local Development Mode)');
+  console.log('💻 Development Mode: Connecting to Local Database');
 }
 
 const pool = new Pool(config);
 
-// التعامل مع الأخطاء المفاجئة للـ Client لمنع انهيار الخادم
+// صمام أمان لالتقاط الأخطاء المفاجئة في الـ Pool ومنع انهيار الحاوية
 pool.on('error', (err) => {
-  console.error('🚨 خطأ غير متوقع في الـ PostgreSQL Pool Client:', err.message);
+  console.error('🚨 Unexpected error on idle Cloud SQL client:', err.message);
 });
 
 module.exports = pool;
