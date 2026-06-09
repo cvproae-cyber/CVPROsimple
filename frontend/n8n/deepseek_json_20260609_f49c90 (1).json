@@ -16,6 +16,18 @@
     },
     {
       "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [256, 608],
+      "id": "respond-verify",
+      "name": "Respond to Verification"
+    },
+    {
+      "parameters": {
         "httpMethod": "POST",
         "path": "whatsapp-webhook",
         "options": {}
@@ -47,8 +59,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, full_name, phone_number FROM customers WHERE phone_number = $1::text LIMIT 1;",
-        "options": { "queryReplacement": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from }}" }
+        "query": "SELECT c.id, c.full_name, conv.human_takeover FROM customers c LEFT JOIN conversations conv ON conv.customer_id = c.id WHERE c.phone_number = $1::text LIMIT 1;",
+        "options": { "queryReplacement": "={{ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from }}" }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
@@ -59,8 +71,26 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "conditions": [{
+            "leftValue": "={{ $json.human_takeover }}",
+            "operator": { "type": "boolean", "operation": "notEqual" },
+            "rightValue": true
+          }],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [560, 800],
+      "id": "if-not-human",
+      "name": "AI Allowed?"
+    },
+    {
+      "parameters": {
         "promptType": "define",
-        "text": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].text.body }}",
+        "text": "={{ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].text.body }}",
         "options": {
           "systemMessage": "أنت مساعد مبيعات ذكي لمنصة CVPro... (نفس النظام القديم)"
         }
@@ -86,7 +116,7 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from }}",
+        "sessionKey": "={{ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from }}",
         "contextWindowLength": 10
       },
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
@@ -104,7 +134,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": {{ JSON.stringify($('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from) }},\n  \"type\": \"text\",\n  \"text\": { \"preview_url\": false, \"body\": {{ JSON.stringify($json.output) }} }\n}"
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": {{ JSON.stringify($('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from) }},\n  \"type\": \"text\",\n  \"text\": { \"preview_url\": false, \"body\": {{ JSON.stringify($json.output) }} }\n}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -117,7 +147,7 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO messages (conversation_id, customer_id, content, direction, is_ai_generated, created_at) \nVALUES (\n  (SELECT id FROM conversations WHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1) LIMIT 1),\n  (SELECT id FROM customers WHERE phone_number = $1),\n  $2,\n  'outbound',\n  true,\n  NOW()\n);\nUPDATE conversations \nSET last_message = $2, updated_at = NOW() \nWHERE customer_id = (SELECT id FROM customers WHERE phone_number = $1);",
-        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook').item.json.body.entry[0].changes[0].value.messages[0].from, $('AI Agent').item.json.output ] }}" }
+        "options": { "queryReplacement": "={{ [ $('WhatsApp Webhook POST').item.json.body.entry[0].changes[0].value.messages[0].from, $('AI Agent').item.json.output ] }}" }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
@@ -457,9 +487,11 @@
     }
   ],
   "connections": {
-    "WhatsApp Webhook": { "main": [[{ "node": "Is Valid Message?", "type": "main", "index": 0 }]] },
+    "WhatsApp Webhook": { "main": [[{ "node": "Respond to Verification", "type": "main", "index": 0 }]] },
+    "WhatsApp Webhook POST": { "main": [[{ "node": "Is Valid Message?", "type": "main", "index": 0 }]] },
     "Is Valid Message?": { "main": [[{ "node": "Check Lead in Postgres", "type": "main", "index": 0 }]] },
-    "Check Lead in Postgres": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "Check Lead in Postgres": { "main": [[{ "node": "AI Allowed?", "type": "main", "index": 0 }]] },
+    "AI Allowed?": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
     "AI Agent": { "main": [[{ "node": "Send WhatsApp Response", "type": "main", "index": 0 }]] },
     "Google Vertex Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
     "Postgres Chat Memory": { "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]] },
@@ -479,10 +511,10 @@
     "Update Takeover Status": { "main": [[{ "node": "Respond Takeover Update", "type": "main", "index": 0 }]] },
     "POST /api/messages": { "main": [[{ "node": "Extract Message Params", "type": "main", "index": 0 }]] },
     "Extract Message Params": { "main": [[{ "node": "Get Phone Number", "type": "main", "index": 0 }]] },
-    "Get Phone Number": { "main": [
-      [{ "node": "Insert Outbound Message", "type": "main", "index": 0 }],
-      [{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]
-    ] },
+    "Get Phone Number": { "main": [[
+      { "node": "Insert Outbound Message", "type": "main", "index": 0 },
+      { "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }
+    ]] },
     "Insert Outbound Message": { "main": [] },
     "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
   },

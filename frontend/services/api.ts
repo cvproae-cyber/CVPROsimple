@@ -13,7 +13,7 @@ export async function fetchCustomers(): Promise<Customer[]> {
 
 export async function updateCustomerStage(id: string, lead_stage: string): Promise<void> {
   const url = `${API_BASE}/customers/stage?customerId=${id}&leadStage=${lead_stage}`;
-  const res = await fetch(url, { method: 'PUT' });
+  const res = await fetch(url, { method: 'PUT' }); // n8n expects PUT with query params
   if (!res.ok) throw new Error('Failed to update stage');
 }
 
@@ -47,13 +47,7 @@ export async function insertOutboundMessage(
   customer_id: string,
   content: string
 ): Promise<void> {
-  // أولاً نستخرج رقم الهاتف من الـ customer (لكن n8n يحتاج رقم الهاتف في body)
-  // الطريقة الأسهل: نطلب من n8n أن يستقبل conversationId فقط ويجد رقم العميل بنفسه
-  // لكن workflow الحالي يتوقع phoneNumber في الـ body.
-  // لذلك نعدل الـ Code node قليلاً (سنفعلها لاحقاً) – لكن حالياً نرسل phoneNumber.
-  // لتبسيط الأمر: سنطلب من n8n أن يقبل conversationId ويجلب رقم الهاتف تلقائياً.
-  // سأعطيك تعديل بسيط في n8n بعد هذا الكود.
-  // مؤقتاً: سأستخدم conversationId فقط وسأعدل n8n.
+  // Aligned with n8n "Extract Message Params" node
   
   const res = await fetch(`${API_BASE}/messages`, {
     method: 'POST',
@@ -64,7 +58,20 @@ export async function insertOutboundMessage(
 }
 
 // ----------------------------------------------
-// 4. مؤقتاً: البث والقوالب والإحصائيات (تعيد بيانات وهمية حتى نضيفها في n8n)
+// 4. n8n Workflow Triggers
+// ----------------------------------------------
+export async function triggerN8nWorkflow(webhookUrl: string, data: any): Promise<any> {
+  const res = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Workflow trigger failed');
+  return res.json();
+}
+
+// ----------------------------------------------
+// 5. مؤقتاً: البث والقوالب والإحصائيات
 // ----------------------------------------------
 export async function fetchBroadcasts(): Promise<Broadcast[]> {
   // مؤقتاً نعيد مصفوفة فارغة
