@@ -62,6 +62,26 @@ CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW 
 DROP TRIGGER IF EXISTS update_conversations_modtime ON conversations;
 CREATE TRIGGER update_conversations_modtime BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
+-- جدول القوالب
+CREATE TABLE IF NOT EXISTS templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    category TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- جدول البث
+CREATE TABLE IF NOT EXISTS broadcasts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    channel TEXT DEFAULT 'whatsapp',
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    sent_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- View مع تضمين channel
 -- Optimization: Added Materialized hint logic or Security Invoker check
 DROP VIEW IF EXISTS conversation_summary;

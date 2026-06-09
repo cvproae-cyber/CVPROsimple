@@ -48,7 +48,7 @@ export async function insertOutboundMessage(
   conversation_id: string,
   content: string
 ): Promise<void> {
-  // Aligned with corrected n8n node (only conversationId and content)
+  // Aligned with sequential n8n flow: inserts first, then triggers WhatsApp
   const res = await fetch(`${API_BASE}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

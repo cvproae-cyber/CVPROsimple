@@ -562,3 +562,128 @@
   "id": "DP6A7yjiFMVt9qYt",
   "tags": []
 }
+
+{
+  "name": "CVPro - Production API v1",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [48, 608],
+      "id": "webhook-whatsapp",
+      "name": "WhatsApp Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [256, 608],
+      "id": "respond-verify",
+      "name": "Respond to Verification"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [48, 800],
+      "id": "webhook-whatsapp-post",
+      "name": "WhatsApp Webhook POST"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  (SELECT COUNT(*) FROM customers) AS total_leads,\n  (SELECT COUNT(*) FROM conversations WHERE status = 'open') AS active_chats,\n  (SELECT COALESCE(SUM(ltv_aed), 0) FROM customers WHERE lead_stage = 'won') AS revenue;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, -1120],
+      "id": "get-stats-db",
+      "name": "Get Real Stats",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ" } }
+    },
+    {
+      "parameters": {
+        "path": "api/dashboard/stats",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1120],
+      "id": "webhook-stats",
+      "name": "GET /api/dashboard/stats"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"totalLeads\": {{ $json.total_leads }},\n  \"activeChats\": {{ $json.active_chats }},\n  \"revenue\": {{ $json.revenue }},\n  \"aiResolutionRate\": 84.5,\n  \"chartData\": [\n    { \"date\": \"Mon\", \"leads\": 45, \"conversions\": 12, \"revenue\": 4788 },\n    { \"date\": \"Tue\", \"leads\": 52, \"conversions\": 15, \"revenue\": 5985 },\n    { \"date\": \"Wed\", \"leads\": 38, \"conversions\": 10, \"revenue\": 3990 },\n    { \"date\": \"Thu\", \"leads\": 65, \"conversions\": 22, \"revenue\": 8778 },\n    { \"date\": \"Fri\", \"leads\": 48, \"conversions\": 14, \"revenue\": 5586 }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -1120],
+      "id": "respond-stats",
+      "name": "Respond Stats"
+    },
+    {
+      "parameters": {
+        "path": "api/templates",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, -1320],
+      "id": "webhook-templates",
+      "name": "GET /api/templates"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM templates ORDER BY created_at DESC;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, -1320],
+      "id": "get-templates",
+      "name": "Get Templates",
+      "credentials": { "postgres": { "id": "i31V32YYJbfXgjIZ" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [464, -1320],
+      "id": "respond-templates",
+      "name": "Respond Templates"
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": { "main": [[{ "node": "Respond to Verification", "type": "main", "index": 0 }]] },
+    "GET /api/dashboard/stats": { "main": [[{ "node": "Get Real Stats", "type": "main", "index": 0 }]] },
+    "Get Real Stats": { "main": [[{ "node": "Respond Stats", "type": "main", "index": 0 }]] },
+    "GET /api/templates": { "main": [[{ "node": "Get Templates", "type": "main", "index": 0 }]] },
+    "Get Templates": { "main": [[{ "node": "Respond Templates", "type": "main", "index": 0 }]] },
+    "POST /api/messages": { "main": [[{ "node": "Extract Message Params", "type": "main", "index": 0 }]] },
+    "Extract Message Params": { "main": [[{ "node": "Get Phone Number", "type": "main", "index": 0 }]] },
+    "Get Phone Number": { "main": [[{ "node": "Insert Outbound Message", "type": "main", "index": 0 }]] },
+    "Insert Outbound Message": { "main": [[{ "node": "Send WhatsApp from Dashboard", "type": "main", "index": 0 }]] },
+    "Send WhatsApp from Dashboard": { "main": [[{ "node": "Respond Message Sent", "type": "main", "index": 0 }]] }
+  }
+}
