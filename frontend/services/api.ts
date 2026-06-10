@@ -2,8 +2,8 @@ import { Customer, Conversation, Message, Broadcast, Template } from '../types';
 
 // Using environment variable for production flexibility
 const N8N_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-1046523361460.me-west1.run.app';
-// Note: n8n webhooks are defined with paths like /api/customers, not /webhook/api/...
-const API_BASE = `${N8N_URL}`;
+// FIX: Added /webhook prefix so that requests go to n8n's webhook endpoints
+const API_BASE = `${N8N_URL}/webhook`;
 
 // ----------------------------------------------
 // 1. العملاء
@@ -61,6 +61,7 @@ export async function insertOutboundMessage(
 // 4. n8n Workflow Triggers
 // ----------------------------------------------
 export async function triggerN8nWorkflow(webhookUrl: string, data: any): Promise<any> {
+  // Note: webhookUrl should already be a full URL (including /webhook if needed)
   const res = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -75,7 +76,7 @@ export async function triggerN8nWorkflow(webhookUrl: string, data: any): Promise
 // ----------------------------------------------
 export async function fetchBroadcasts(): Promise<Broadcast[]> {
   const res = await fetch(`${API_BASE}/api/broadcasts`);
-  if (!res.ok) return []; // Fallback to empty array, but we'll handle error in component
+  if (!res.ok) return [];
   return res.json();
 }
 
