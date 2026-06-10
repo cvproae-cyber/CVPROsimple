@@ -3,6 +3,13 @@
 -- PostgreSQL 14+
 -- =============================================
 
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- =============================================
+-- Tables
+-- =============================================
+
 -- Customers table (leads)
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,7 +20,7 @@ CREATE TABLE IF NOT EXISTS customers (
     language TEXT DEFAULT 'ar',
     country TEXT DEFAULT 'AE',
     ltv_aed NUMERIC(10,2) DEFAULT 0,
-    opted_in BOOLEAN DEFAULT TRUE,  -- for broadcast consent
+    opted_in BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -63,7 +70,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Chat memory table for n8n LangChain (auto-created by n8n, but included here for clarity)
+-- Chat memory table for n8n LangChain (auto-created by n8n, but included for clarity)
 CREATE TABLE IF NOT EXISTS n8n_chat_histories (
     id SERIAL PRIMARY KEY,
     session_key TEXT NOT NULL,
@@ -107,20 +114,45 @@ CREATE INDEX IF NOT EXISTS idx_n8n_chat_histories_session ON n8n_chat_histories(
 -- Sample data (optional – for development)
 -- =============================================
 
+-- Insert sample customers with fixed UUIDs (or leave id out to auto-generate)
 INSERT INTO customers (id, full_name, phone_number, lead_stage, buying_intent_score, language, country, ltv_aed)
 VALUES 
     ('11111111-1111-1111-1111-111111111111', 'أحمد المنصوري', '+971501234567', 'qualified', 85, 'ar', 'AE', 0),
     ('22222222-2222-2222-2222-222222222222', 'Fatima Al Shehhi', '+971502345678', 'new', 60, 'en', 'AE', 0)
 ON CONFLICT (phone_number) DO NOTHING;
 
+-- Insert sample conversations
 INSERT INTO conversations (id, customer_id, channel, status, human_takeover, last_message)
 VALUES 
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'whatsapp', 'open', false, 'مرحباً، أحتاج مساعدة في سيرتي الذاتية'),
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'whatsapp', 'open', true, 'هل يمكنكم مساعدتي؟')
 ON CONFLICT (id) DO NOTHING;
 
+-- Insert sample templates using valid UUIDs (not custom strings)
 INSERT INTO templates (id, name, language, category, content)
 VALUES 
-    ('tpl-001', 'welcome_ar', 'ar', 'greeting', 'مرحباً {{customer_name}}! 👋\nأنا المساعد الذكي لـ CVPro. كيف يمكنني مساعدتك اليوم؟'),
-    ('tpl-002', 'cv_analysis_complete', 'en', 'update', 'Dear {{customer_name}},\n\nWe have completed the analysis of your CV. Your ATS score is {{score}}%.')
+    ('550e8400-e29b-41d4-a716-446655440001', 'welcome_ar', 'ar', 'greeting', 'مرحباً {{customer_name}}! 👋\nأنا المساعد الذكي لـ CVPro. كيف يمكنني مساعدتك اليوم؟'),
+    ('550e8400-e29b-41d4-a716-446655440002', 'cv_analysis_complete', 'en', 'update', 'Dear {{customer_name}},\n\nWe have completed the analysis of your CV. Your ATS score is {{score}}%.')
 ON CONFLICT (id) DO NOTHING;
+
+-- =============================================
+-- Optional: Auto-update updated_at column
+-- =============================================
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_customers_updated_at ON customers;
+CREATE TRIGGER update_customers_updated_at
+    BEFORE UPDATE ON customers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_conversations_updated_at ON conversations;
+CREATE TRIGGER update_conversations_updated_at
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
